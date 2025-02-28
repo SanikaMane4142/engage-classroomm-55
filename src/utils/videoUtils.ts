@@ -24,9 +24,7 @@ export const getUserMedia = async (video = true, audio = true) => {
 export const getDisplayMedia = async () => {
   try {
     return await navigator.mediaDevices.getDisplayMedia({
-      video: {
-        cursor: 'always',
-      },
+      video: true,
       audio: false,
     });
   } catch (error) {
