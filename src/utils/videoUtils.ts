@@ -49,6 +49,11 @@ export const stopMediaStream = (stream: MediaStream | null) => {
 export const attachMediaStream = (videoElement: HTMLVideoElement | null, stream: MediaStream | null) => {
   if (!videoElement || !stream) return;
   videoElement.srcObject = stream;
+  
+  // Ensure the video plays by handling the loadedmetadata event
+  videoElement.onloadedmetadata = () => {
+    videoElement.play().catch(e => console.error('Error playing video:', e));
+  };
 };
 
 /**
@@ -111,17 +116,31 @@ export const createMockRemoteStream = async () => {
   }
   
   // Convert the canvas to a media stream
-  // @ts-ignore - Canvas captureStream is not in the TypeScript types
-  const stream = canvas.captureStream(30);
+  let stream;
   
-  // Adding an audio track for completeness
   try {
-    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    const audioTrack = audioStream.getAudioTracks()[0];
-    stream.addTrack(audioTrack);
-  } catch (e) {
-    console.warn('Could not add audio to mock stream:', e);
+    // @ts-ignore - Canvas captureStream is not in the TypeScript types
+    stream = canvas.captureStream(30);
+    
+    // Adding an audio track for completeness
+    try {
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const audioTrack = audioStream.getAudioTracks()[0];
+      stream.addTrack(audioTrack);
+    } catch (e) {
+      console.warn('Could not add audio to mock stream:', e);
+    }
+    
+    return stream;
+  } catch (error) {
+    console.error('Error creating mock stream:', error);
+    
+    // Fallback: try to create a real camera stream as a placeholder
+    try {
+      return await getUserMedia(true, true);
+    } catch (fallbackError) {
+      console.error('Fallback stream creation failed:', fallbackError);
+      throw error;
+    }
   }
-  
-  return stream;
 };

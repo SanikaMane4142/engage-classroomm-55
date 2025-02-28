@@ -66,15 +66,30 @@ const Meeting = () => {
   useEffect(() => {
     const initializeMedia = async () => {
       try {
+        console.log("Initializing media streams...");
+        
         // Get user media stream
         const stream = await getUserMedia(true, true);
         setLocalStream(stream);
-        attachMediaStream(localVideoRef.current, stream);
+        
+        if (localVideoRef.current) {
+          console.log("Attaching local stream to video element");
+          attachMediaStream(localVideoRef.current, stream);
+        } else {
+          console.error("Local video element reference is null");
+        }
         
         // Create mock remote stream for demo
+        console.log("Creating mock remote stream...");
         const mock = await createMockRemoteStream();
         setRemoteStream(mock);
-        attachMediaStream(remoteVideoRef.current, mock);
+        
+        if (remoteVideoRef.current) {
+          console.log("Attaching remote stream to video element");
+          attachMediaStream(remoteVideoRef.current, mock);
+        } else {
+          console.error("Remote video element reference is null");
+        }
         
         // Show success message
         toast({
@@ -236,20 +251,25 @@ const Meeting = () => {
   return (
     <div className="relative h-screen bg-black overflow-hidden">
       {/* Main video container */}
-      <div className="video-container h-full">
+      <div className="video-container h-full w-full relative">
+        {/* Remote video (large) */}
         <video
           ref={remoteVideoRef}
           autoPlay
           playsInline
-          className="remote-video"
+          className="w-full h-full object-cover absolute inset-0 z-0"
         />
-        <video
-          ref={localVideoRef}
-          autoPlay
-          playsInline
-          muted
-          className="local-video"
-        />
+        
+        {/* Local video (small overlay) */}
+        <div className="absolute bottom-4 right-4 w-40 h-30 md:w-64 md:h-48 z-10 rounded-lg overflow-hidden shadow-lg">
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+          />
+        </div>
       </div>
       
       {/* Meeting controls */}
