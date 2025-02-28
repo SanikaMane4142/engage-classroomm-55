@@ -77,9 +77,33 @@ export const replaceMediaStreamTracks = (oldStream: MediaStream | null, newStrea
 
 /**
  * Utility to create a mock remote stream for demo purposes
+ * Now uses a real camera feed instead of a canvas animation
  */
 export const createMockRemoteStream = async () => {
-  // Create a canvas element to generate a test video pattern
+  try {
+    console.log("Getting real camera for mock remote stream");
+    // Use the actual camera for the "remote" user to better simulate a real meeting
+    const stream = await getUserMedia(true, true);
+    
+    if (stream) {
+      console.log("Successfully created mock remote stream with real camera");
+      return stream;
+    } else {
+      throw new Error("Failed to get camera stream");
+    }
+  } catch (error) {
+    console.error('Error creating real camera mock stream:', error);
+    
+    // Fall back to canvas-based stream if camera access fails
+    return createCanvasStream();
+  }
+};
+
+/**
+ * Creates a canvas-based stream as fallback
+ */
+const createCanvasStream = async () => {
+  console.log("Creating canvas-based fallback stream");
   const canvas = document.createElement('canvas');
   canvas.width = 640;
   canvas.height = 480;
@@ -105,7 +129,7 @@ export const createMockRemoteStream = async () => {
       ctx.fillStyle = 'white';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Remote User', canvas.width / 2, canvas.height / 2 - 30);
+      ctx.fillText('Remote Camera Unavailable', canvas.width / 2, canvas.height / 2 - 30);
       ctx.font = '30px Arial';
       ctx.fillText(time, canvas.width / 2, canvas.height / 2 + 30);
       
@@ -115,12 +139,9 @@ export const createMockRemoteStream = async () => {
     animate();
   }
   
-  // Convert the canvas to a media stream
-  let stream;
-  
   try {
     // @ts-ignore - Canvas captureStream is not in the TypeScript types
-    stream = canvas.captureStream(30);
+    const stream = canvas.captureStream(30);
     
     // Adding an audio track for completeness
     try {
@@ -133,14 +154,7 @@ export const createMockRemoteStream = async () => {
     
     return stream;
   } catch (error) {
-    console.error('Error creating mock stream:', error);
-    
-    // Fallback: try to create a real camera stream as a placeholder
-    try {
-      return await getUserMedia(true, true);
-    } catch (fallbackError) {
-      console.error('Fallback stream creation failed:', fallbackError);
-      throw error;
-    }
+    console.error('Error creating canvas stream:', error);
+    throw error;
   }
 };
