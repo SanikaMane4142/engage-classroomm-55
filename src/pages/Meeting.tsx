@@ -91,14 +91,21 @@ const Meeting = () => {
           console.error("Local video element reference is null");
         }
         
-        // Create mock student streams (4 students)
+        // Create mock student streams (4 students) - now tries to use real cameras where possible
+        console.log("Creating student streams with real cameras where possible");
         const mockStudents = await createMultipleStudentStreams(4);
         setStudentStreams(mockStudents);
+        
+        // Add video refs to each student
+        const studentsWithRefs = mockStudents.map(student => ({
+          ...student,
+          videoRef: React.createRef<HTMLVideoElement>(),
+        }));
         
         // Show success message
         toast({
           title: "Connected to meeting",
-          description: `You've joined meeting ID: ${meetingId}`,
+          description: `You've joined meeting ID: ${meetingId} with ${mockStudents.length} students`,
         });
         
         // Start emotion detection if user is a teacher
@@ -129,6 +136,7 @@ const Meeting = () => {
     
     // Clean up on unmount
     return () => {
+      console.log("Cleaning up media streams");
       stopMediaStream(localStream);
       
       // Clean up all student streams
@@ -142,9 +150,13 @@ const Meeting = () => {
   
   // Attach student streams to video elements when they're available
   useEffect(() => {
+    console.log(`Attaching ${studentStreams.length} student streams to video elements`);
     studentStreams.forEach(student => {
       if (student.videoRef?.current) {
+        console.log(`Attaching stream for student ${student.name}`);
         attachMediaStream(student.videoRef.current, student.stream);
+      } else {
+        console.warn(`Video ref for student ${student.name} is not available`);
       }
     });
   }, [studentStreams]);

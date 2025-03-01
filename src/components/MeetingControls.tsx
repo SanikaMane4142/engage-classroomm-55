@@ -32,17 +32,17 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
   isChatOpen,
 }) => {
   return (
-    <div className="meeting-controls">
+    <div className="meeting-controls fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 rounded-full p-2 flex items-center space-x-2 z-30">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
-              variant="ghost" 
-              className={`control-button ${isMicOn ? 'control-button-on' : 'control-button-off'}`}
+              variant={isMicOn ? "default" : "destructive"} 
+              className="rounded-full h-10 w-10 p-0 flex items-center justify-center"
               onClick={toggleMic}
               size="icon"
             >
-              {isMicOn ? <Mic /> : <MicOff />}
+              {isMicOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -53,12 +53,12 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
-              variant="ghost" 
-              className={`control-button ${isCameraOn ? 'control-button-on' : 'control-button-off'}`}
+              variant={isCameraOn ? "default" : "destructive"} 
+              className="rounded-full h-10 w-10 p-0 flex items-center justify-center"
               onClick={toggleCamera}
               size="icon"
             >
-              {isCameraOn ? <Video /> : <VideoOff />}
+              {isCameraOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -69,12 +69,12 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
-              variant="ghost" 
-              className={`control-button ${isScreenSharing ? 'control-button-on' : 'control-button-off'}`}
+              variant={isScreenSharing ? "destructive" : "default"} 
+              className="rounded-full h-10 w-10 p-0 flex items-center justify-center"
               onClick={toggleScreenShare}
               size="icon"
             >
-              {isScreenSharing ? <ScreenShareOff /> : <ScreenShare />}
+              {isScreenSharing ? <ScreenShareOff className="h-5 w-5" /> : <ScreenShare className="h-5 w-5" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -85,12 +85,12 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
-              variant="ghost" 
-              className={`control-button ${isParticipantsOpen ? 'control-button-on' : 'control-button-off'}`}
+              variant={isParticipantsOpen ? "secondary" : "default"} 
+              className="rounded-full h-10 w-10 p-0 flex items-center justify-center"
               onClick={toggleParticipants}
               size="icon"
             >
-              <Users />
+              <Users className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -101,12 +101,12 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
-              variant="ghost" 
-              className={`control-button ${isChatOpen ? 'control-button-on' : 'control-button-off'}`}
+              variant={isChatOpen ? "secondary" : "default"} 
+              className="rounded-full h-10 w-10 p-0 flex items-center justify-center"
               onClick={toggleChat}
               size="icon"
             >
-              <MessageSquare />
+              <MessageSquare className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
@@ -117,12 +117,12 @@ const MeetingControls: React.FC<MeetingControlsProps> = ({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
-              variant="ghost" 
-              className="control-button-danger"
+              variant="destructive" 
+              className="rounded-full h-10 w-10 p-0 flex items-center justify-center"
               onClick={endMeeting}
               size="icon"
             >
-              <PhoneOff />
+              <PhoneOff className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>

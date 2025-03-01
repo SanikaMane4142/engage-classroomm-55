@@ -47,7 +47,12 @@ export const stopMediaStream = (stream: MediaStream | null) => {
  * Add track to an HTML video element
  */
 export const attachMediaStream = (videoElement: HTMLVideoElement | null, stream: MediaStream | null) => {
-  if (!videoElement || !stream) return;
+  if (!videoElement || !stream) {
+    console.log("Cannot attach stream - video element or stream is null");
+    return;
+  }
+  
+  console.log("Attaching media stream to video element");
   videoElement.srcObject = stream;
   
   // Ensure the video plays by handling the loadedmetadata event
@@ -77,6 +82,7 @@ export const replaceMediaStreamTracks = (oldStream: MediaStream | null, newStrea
 
 /**
  * Utility to create a mock remote stream for demo purposes
+ * Tries to use a real camera first
  */
 export const createMockRemoteStream = async () => {
   try {
@@ -160,26 +166,48 @@ const createCanvasStream = async () => {
 
 /**
  * Create multiple mock remote streams for simulating multiple students
+ * Attempts to use real cameras for all students when possible
  */
 export const createMultipleStudentStreams = async (count: number) => {
-  console.log(`Creating ${count} student streams`);
+  console.log(`Creating ${count} student streams, attempting to use real cameras`);
   const streams: { id: string; name: string; stream: MediaStream }[] = [];
   
-  // Create one stream using real camera (if available)
+  // Try to get all available video devices
   try {
-    const realStream = await createMockRemoteStream();
-    streams.push({
-      id: '1',
-      name: 'Alice Johnson',
-      stream: realStream,
-    });
-  } catch (error) {
-    console.error('Failed to create real camera stream for student 1:', error);
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+    console.log(`Found ${videoDevices.length} video devices:`, videoDevices);
+    
+    // For each video device, try to create a stream
+    for (let i = 0; i < Math.min(count, videoDevices.length); i++) {
+      try {
+        const deviceId = videoDevices[i].deviceId;
+        console.log(`Attempting to access camera device ${deviceId}`);
+        
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } },
+          audio: true
+        });
+        
+        streams.push({
+          id: `${i + 1}`,
+          name: getStudentName(i),
+          stream,
+        });
+        
+        console.log(`Successfully added stream from camera device ${deviceId}`);
+      } catch (err) {
+        console.error(`Failed to access camera device ${i}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to enumerate devices:', err);
   }
   
-  // Create remaining streams using canvas
+  // If we couldn't get enough real cameras, create canvas streams for the rest
   for (let i = streams.length; i < count; i++) {
     try {
+      console.log(`Creating canvas stream for student ${i + 1} (not enough cameras)`);
       const stream = await createCanvasStreamWithName(`Student ${i + 1}`);
       streams.push({
         id: `${i + 1}`,
