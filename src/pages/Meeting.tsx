@@ -20,8 +20,8 @@ import {
   stopMediaStream, 
   attachMediaStream, 
   getDisplayMedia,
-  createMockRemoteStream,
-  createMultipleStudentStreams
+  createMultipleStudentStreams,
+  getVideoInputDevices
 } from '../utils/videoUtils';
 import { startEmotionDetection } from '../utils/emotionDetection';
 import { X, User, AlertTriangle, Users as UsersIcon } from 'lucide-react';
@@ -56,6 +56,7 @@ const Meeting = () => {
   const [studentStreams, setStudentStreams] = useState<StudentStream[]>([]);
   const [activeView, setActiveView] = useState<'grid' | 'speaker'>('grid');
   const [focusedStudent, setFocusedStudent] = useState<string | null>(null);
+  const [videoCameraCount, setVideoCameraCount] = useState(0);
   
   // Emotion detection
   const [emotionData, setEmotionData] = useState<StudentEmotion[]>([]);
@@ -80,27 +81,41 @@ const Meeting = () => {
       try {
         console.log("Initializing media streams...");
         
-        // Get user media stream
+        // Check how many video cameras are available
+        const videoDevices = await getVideoInputDevices();
+        setVideoCameraCount(videoDevices.length);
+        console.log(`Found ${videoDevices.length} camera devices in total`);
+        
+        // Get user media stream for the teacher
         const stream = await getUserMedia(true, true);
         setLocalStream(stream);
         
         if (localVideoRef.current) {
-          console.log("Attaching local stream to video element");
+          console.log("Attaching local stream to teacher's video element");
           attachMediaStream(localVideoRef.current, stream);
         } else {
           console.error("Local video element reference is null");
         }
         
-        // Create mock student streams (4 students) - now tries to use real cameras where possible
-        console.log("Creating student streams with real cameras where possible");
+        // Create student streams with real cameras where possible
+        console.log("Creating student streams with real cameras");
         const mockStudents = await createMultipleStudentStreams(4);
-        setStudentStreams(mockStudents);
         
         // Add video refs to each student
         const studentsWithRefs = mockStudents.map(student => ({
           ...student,
           videoRef: React.createRef<HTMLVideoElement>(),
         }));
+        
+        setStudentStreams(studentsWithRefs);
+        
+        // Count real camera streams vs canvas streams
+        const realCameraCount = mockStudents.filter(s => 
+          s.stream.getVideoTracks()[0]?.label && 
+          !s.stream.getVideoTracks()[0]?.label.includes('canvas')
+        ).length;
+        
+        console.log(`Successfully created ${mockStudents.length} student streams (${realCameraCount} with real cameras)`);
         
         // Show success message
         toast({
@@ -304,6 +319,12 @@ const Meeting = () => {
   
   return (
     <div className="relative h-screen bg-black overflow-hidden">
+      {videoCameraCount === 0 && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-600 text-white px-4 py-2 rounded-md">
+          No cameras detected. Please check your camera permissions.
+        </div>
+      )}
+      
       {/* View toggle button */}
       <div className="absolute top-4 right-4 z-20">
         <Button 

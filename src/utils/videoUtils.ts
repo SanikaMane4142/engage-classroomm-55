@@ -19,6 +19,43 @@ export const getUserMedia = async (video = true, audio = true) => {
 };
 
 /**
+ * Get user media stream with a specific device ID
+ */
+export const getUserMediaWithDeviceId = async (deviceId: string, audio = true) => {
+  try {
+    console.log(`Getting user media with device ID: ${deviceId}`);
+    const constraints = {
+      video: { 
+        deviceId: { exact: deviceId },
+        width: 1280, 
+        height: 720 
+      },
+      audio,
+    };
+    
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (error) {
+    console.error(`Error accessing media device ${deviceId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get available video input devices
+ */
+export const getVideoInputDevices = async () => {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+    console.log(`Found ${videoDevices.length} video devices:`, videoDevices);
+    return videoDevices;
+  } catch (error) {
+    console.error('Error enumerating devices:', error);
+    return [];
+  }
+};
+
+/**
  * Get display media stream (screen sharing)
  */
 export const getDisplayMedia = async () => {
@@ -81,113 +118,42 @@ export const replaceMediaStreamTracks = (oldStream: MediaStream | null, newStrea
 };
 
 /**
- * Utility to create a mock remote stream for demo purposes
- * Tries to use a real camera first
- */
-export const createMockRemoteStream = async () => {
-  try {
-    console.log("Getting real camera for mock remote stream");
-    // Use the actual camera for the "remote" user to better simulate a real meeting
-    const stream = await getUserMedia(true, true);
-    
-    if (stream) {
-      console.log("Successfully created mock remote stream with real camera");
-      return stream;
-    } else {
-      throw new Error("Failed to get camera stream");
-    }
-  } catch (error) {
-    console.error('Error creating real camera mock stream:', error);
-    
-    // Fall back to canvas-based stream if camera access fails
-    return createCanvasStream();
-  }
-};
-
-/**
- * Creates a canvas-based stream as fallback
- */
-const createCanvasStream = async () => {
-  console.log("Creating canvas-based fallback stream");
-  const canvas = document.createElement('canvas');
-  canvas.width = 640;
-  canvas.height = 480;
-  
-  // Draw something on the canvas
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    // Create a gradient for the background
-    const gradient = ctx.createLinearGradient(0, 0, 640, 480);
-    gradient.addColorStop(0, '#4338ca');
-    gradient.addColorStop(1, '#3b82f6');
-    
-    const animate = () => {
-      if (!ctx) return;
-      
-      // Clear the canvas
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw a text
-      const time = new Date().toLocaleTimeString();
-      ctx.font = '40px Arial';
-      ctx.fillStyle = 'white';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Remote Camera Unavailable', canvas.width / 2, canvas.height / 2 - 30);
-      ctx.font = '30px Arial';
-      ctx.fillText(time, canvas.width / 2, canvas.height / 2 + 30);
-      
-      requestAnimationFrame(animate);
-    };
-    
-    animate();
-  }
-  
-  try {
-    // @ts-ignore - Canvas captureStream is not in the TypeScript types
-    const stream = canvas.captureStream(30);
-    
-    // Adding an audio track for completeness
-    try {
-      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      const audioTrack = audioStream.getAudioTracks()[0];
-      stream.addTrack(audioTrack);
-    } catch (e) {
-      console.warn('Could not add audio to mock stream:', e);
-    }
-    
-    return stream;
-  } catch (error) {
-    console.error('Error creating canvas stream:', error);
-    throw error;
-  }
-};
-
-/**
- * Create multiple mock remote streams for simulating multiple students
- * Attempts to use real cameras for all students when possible
+ * Create multiple student streams for simulating multiple students
+ * Using REAL cameras for ALL students when possible
  */
 export const createMultipleStudentStreams = async (count: number) => {
-  console.log(`Creating ${count} student streams, attempting to use real cameras`);
+  console.log(`Creating ${count} student streams with real cameras`);
   const streams: { id: string; name: string; stream: MediaStream }[] = [];
   
-  // Try to get all available video devices
   try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = devices.filter(device => device.kind === 'videoinput');
-    console.log(`Found ${videoDevices.length} video devices:`, videoDevices);
+    // Get all available video devices
+    const videoDevices = await getVideoInputDevices();
     
-    // For each video device, try to create a stream
-    for (let i = 0; i < Math.min(count, videoDevices.length); i++) {
+    // First, determine which device we'll use for the teacher (local) stream
+    // We'll skip this device when assigning devices to students
+    const teacherStream = await getUserMedia(true, true);
+    const teacherTrack = teacherStream.getVideoTracks()[0];
+    const teacherDeviceId = teacherTrack ? teacherTrack.getSettings().deviceId : '';
+    
+    console.log(`Teacher using device ID: ${teacherDeviceId}`);
+    
+    // Filter out the teacher's device
+    const studentVideoDevices = videoDevices.filter(device => 
+      device.deviceId !== teacherDeviceId && device.deviceId !== ''
+    );
+    
+    console.log(`Found ${studentVideoDevices.length} available devices for students`);
+    
+    // Stop the teacher stream we just created for detection
+    stopMediaStream(teacherStream);
+    
+    // For each available device, create a student stream
+    for (let i = 0; i < Math.min(count, studentVideoDevices.length); i++) {
       try {
-        const deviceId = videoDevices[i].deviceId;
-        console.log(`Attempting to access camera device ${deviceId}`);
+        const deviceId = studentVideoDevices[i].deviceId;
+        console.log(`Creating stream for student ${i+1} with device ID: ${deviceId}`);
         
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: deviceId } },
-          audio: true
-        });
+        const stream = await getUserMediaWithDeviceId(deviceId, true);
         
         streams.push({
           id: `${i + 1}`,
@@ -195,31 +161,64 @@ export const createMultipleStudentStreams = async (count: number) => {
           stream,
         });
         
-        console.log(`Successfully added stream from camera device ${deviceId}`);
+        console.log(`Successfully added real camera stream for student ${i+1}`);
       } catch (err) {
-        console.error(`Failed to access camera device ${i}:`, err);
+        console.error(`Failed to access real camera for student ${i+1}:`, err);
+        // Fall back to canvas stream
+        const canvasStream = await createCanvasStreamWithName(`Student ${i+1}`);
+        streams.push({
+          id: `${i + 1}`,
+          name: getStudentName(i),
+          stream: canvasStream,
+        });
       }
     }
-  } catch (err) {
-    console.error('Failed to enumerate devices:', err);
+    
+    // If we couldn't get enough real cameras, create canvas streams for the rest
+    for (let i = streams.length; i < count; i++) {
+      try {
+        console.log(`Creating canvas stream for student ${i+1} (not enough cameras)`);
+        const stream = await createCanvasStreamWithName(`Student ${i+1}`);
+        streams.push({
+          id: `${i + 1}`,
+          name: getStudentName(i),
+          stream,
+        });
+      } catch (error) {
+        console.error(`Failed to create stream for student ${i+1}:`, error);
+      }
+    }
+    
+    console.log(`Successfully created ${streams.length} student streams`);
+    return streams;
+  } catch (error) {
+    console.error('Error creating student streams:', error);
+    
+    // Fall back to all canvas streams if something went wrong
+    return createAllCanvasStreams(count);
   }
+};
+
+/**
+ * Create all canvas-based streams as a fallback
+ */
+const createAllCanvasStreams = async (count: number) => {
+  console.log(`Creating ${count} canvas-based student streams as fallback`);
+  const streams: { id: string; name: string; stream: MediaStream }[] = [];
   
-  // If we couldn't get enough real cameras, create canvas streams for the rest
-  for (let i = streams.length; i < count; i++) {
+  for (let i = 0; i < count; i++) {
     try {
-      console.log(`Creating canvas stream for student ${i + 1} (not enough cameras)`);
-      const stream = await createCanvasStreamWithName(`Student ${i + 1}`);
+      const stream = await createCanvasStreamWithName(`Student ${i+1}`);
       streams.push({
         id: `${i + 1}`,
         name: getStudentName(i),
         stream,
       });
     } catch (error) {
-      console.error(`Failed to create stream for student ${i + 1}:`, error);
+      console.error(`Failed to create canvas stream for student ${i+1}:`, error);
     }
   }
   
-  console.log(`Successfully created ${streams.length} student streams`);
   return streams;
 };
 
