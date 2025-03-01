@@ -20,10 +20,19 @@ import {
   stopMediaStream, 
   attachMediaStream, 
   getDisplayMedia,
-  createMockRemoteStream 
+  createMockRemoteStream,
+  createMultipleStudentStreams
 } from '../utils/videoUtils';
 import { startEmotionDetection } from '../utils/emotionDetection';
-import { X, User, AlertTriangle } from 'lucide-react';
+import { X, User, AlertTriangle, Users as UsersIcon } from 'lucide-react';
+
+// Interface for student streams
+interface StudentStream {
+  id: string;
+  name: string;
+  stream: MediaStream;
+  videoRef?: React.RefObject<HTMLVideoElement>;
+}
 
 const Meeting = () => {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -44,6 +53,9 @@ const Meeting = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [studentStreams, setStudentStreams] = useState<StudentStream[]>([]);
+  const [activeView, setActiveView] = useState<'grid' | 'speaker'>('grid');
+  const [focusedStudent, setFocusedStudent] = useState<string | null>(null);
   
   // Emotion detection
   const [emotionData, setEmotionData] = useState<StudentEmotion[]>([]);
@@ -79,17 +91,9 @@ const Meeting = () => {
           console.error("Local video element reference is null");
         }
         
-        // Create mock remote stream for demo
-        console.log("Creating mock remote stream...");
-        const mock = await createMockRemoteStream();
-        setRemoteStream(mock);
-        
-        if (remoteVideoRef.current) {
-          console.log("Attaching remote stream to video element");
-          attachMediaStream(remoteVideoRef.current, mock);
-        } else {
-          console.error("Remote video element reference is null");
-        }
+        // Create mock student streams (4 students)
+        const mockStudents = await createMultipleStudentStreams(4);
+        setStudentStreams(mockStudents);
         
         // Show success message
         toast({
@@ -126,10 +130,24 @@ const Meeting = () => {
     // Clean up on unmount
     return () => {
       stopMediaStream(localStream);
-      stopMediaStream(remoteStream);
+      
+      // Clean up all student streams
+      studentStreams.forEach(student => {
+        stopMediaStream(student.stream);
+      });
+      
       stopMediaStream(screenStream);
     };
   }, [meetingId, toast, user?.role]);
+  
+  // Attach student streams to video elements when they're available
+  useEffect(() => {
+    studentStreams.forEach(student => {
+      if (student.videoRef?.current) {
+        attachMediaStream(student.videoRef.current, student.stream);
+      }
+    });
+  }, [studentStreams]);
   
   // Toggle microphone
   const toggleMic = () => {
@@ -206,7 +224,12 @@ const Meeting = () => {
   const endMeeting = () => {
     // Stop all media streams
     stopMediaStream(localStream);
-    stopMediaStream(remoteStream);
+    
+    // Stop all student streams
+    studentStreams.forEach(student => {
+      stopMediaStream(student.stream);
+    });
+    
     stopMediaStream(screenStream);
     
     // Navigate back to dashboard
@@ -233,6 +256,19 @@ const Meeting = () => {
       setIsParticipantsOpen(false);
     }
   };
+
+  // Toggle view mode (grid or speaker)
+  const toggleView = () => {
+    setActiveView(activeView === 'grid' ? 'speaker' : 'grid');
+  };
+
+  // Focus on a specific student
+  const focusOnStudent = (studentId: string) => {
+    setFocusedStudent(studentId === focusedStudent ? null : studentId);
+    if (studentId !== focusedStudent) {
+      setActiveView('speaker');
+    }
+  };
   
   // If there's an error, show error screen
   if (errorMessage) {
@@ -248,29 +284,140 @@ const Meeting = () => {
     );
   }
   
+  // Create video refs for each student
+  const studentsWithRefs = studentStreams.map(student => ({
+    ...student,
+    videoRef: React.createRef<HTMLVideoElement>(),
+  }));
+  
   return (
     <div className="relative h-screen bg-black overflow-hidden">
-      {/* Main video container */}
-      <div className="video-container h-full w-full relative">
-        {/* Remote video (large) */}
-        <video
-          ref={remoteVideoRef}
-          autoPlay
-          playsInline
-          className="w-full h-full object-cover absolute inset-0 z-0"
-        />
-        
-        {/* Local video (small overlay) */}
-        <div className="absolute bottom-4 right-4 w-40 h-30 md:w-64 md:h-48 z-10 rounded-lg overflow-hidden shadow-lg">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-          />
-        </div>
+      {/* View toggle button */}
+      <div className="absolute top-4 right-4 z-20">
+        <Button 
+          variant="outline" 
+          className="bg-black/50 text-white border-gray-600 hover:bg-black/70"
+          onClick={toggleView}
+        >
+          {activeView === 'grid' ? 'Speaker View' : 'Grid View'}
+        </Button>
       </div>
+      
+      {activeView === 'grid' ? (
+        // Grid view layout
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-2 h-full w-full">
+          {/* Teacher/Local video */}
+          <div className="relative rounded-lg overflow-hidden bg-gray-900 aspect-video">
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute bottom-2 left-2 bg-black/60 text-white px-2 py-0.5 text-sm rounded">
+              You (Teacher)
+            </div>
+          </div>
+          
+          {/* Student videos */}
+          {studentsWithRefs.map((student) => (
+            <div 
+              key={student.id} 
+              className="relative rounded-lg overflow-hidden bg-gray-900 aspect-video cursor-pointer"
+              onClick={() => focusOnStudent(student.id)}
+            >
+              <video
+                ref={student.videoRef}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute bottom-2 left-2 bg-black/60 text-white px-2 py-0.5 text-sm rounded">
+                {student.name}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        // Speaker view layout
+        <div className="flex flex-col h-full">
+          {/* Main video (focused student or teacher) */}
+          <div className="flex-1 p-2">
+            <div className="relative rounded-lg overflow-hidden bg-gray-900 h-full">
+              {focusedStudent ? (
+                // Focused student video
+                <>
+                  <video
+                    ref={studentsWithRefs.find(s => s.id === focusedStudent)?.videoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-4 left-4 bg-black/60 text-white px-2 py-1 text-md rounded">
+                    {studentsWithRefs.find(s => s.id === focusedStudent)?.name}
+                  </div>
+                </>
+              ) : (
+                // Default to teacher if no student is focused
+                <>
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-4 left-4 bg-black/60 text-white px-2 py-1 text-md rounded">
+                    You (Teacher)
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          
+          {/* Thumbnails row */}
+          <div className="h-24 p-2">
+            <div className="flex space-x-2 h-full">
+              {/* Teacher thumbnail */}
+              <div 
+                className={`relative rounded-lg overflow-hidden bg-gray-900 h-full aspect-video cursor-pointer ${!focusedStudent ? 'ring-2 ring-blue-500' : ''}`}
+                onClick={() => setFocusedStudent(null)}
+              >
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-1 left-1 bg-black/60 text-white px-1 py-0.5 text-xs rounded">
+                  You
+                </div>
+              </div>
+              
+              {/* Student thumbnails */}
+              {studentsWithRefs.map((student) => (
+                <div 
+                  key={student.id} 
+                  className={`relative rounded-lg overflow-hidden bg-gray-900 h-full aspect-video cursor-pointer ${student.id === focusedStudent ? 'ring-2 ring-blue-500' : ''}`}
+                  onClick={() => focusOnStudent(student.id)}
+                >
+                  <video
+                    ref={student.videoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-1 left-1 bg-black/60 text-white px-1 py-0.5 text-xs rounded">
+                    {student.name.split(' ')[0]}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Meeting controls */}
       <MeetingControls
