@@ -15,12 +15,23 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 
 const Login = () => {
+  // Login state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<UserRole>('teacher');
+  const [role, setRole] = useState<UserRole>('student');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'standard' | 'ai'>('standard');
-  const { login, error } = useAuth();
+  
+  // Signup state
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [signupRole, setSignupRole] = useState<UserRole>('student');
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  
+  // UI state
+  const [activeTab, setActiveTab] = useState<'login' | 'signup' | 'ai'>('login');
+  
+  const { login, signup, error } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -29,12 +40,7 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      // For demo, use teacher@example.com or student@example.com with any password
-      await login(email, password, role);
-      toast({
-        title: "Login successful",
-        description: `Welcome back! You've signed in as a ${role}.`,
-      });
+      await login(email, password);
     } catch (error) {
       console.error('Login failed:', error);
       // Error is handled by the auth context and displayed below
@@ -43,24 +49,38 @@ const Login = () => {
     }
   };
 
-  const handleRoleChange = (value: string) => {
-    setRole(value as UserRole);
-  };
-
-  const handleDemoLogin = async (demoRole: UserRole) => {
-    setIsSubmitting(true);
-    try {
-      const demoEmail = demoRole === 'teacher' ? 'teacher@example.com' : 'student@example.com';
-      const demoPassword = 'password';
-      await login(demoEmail, demoPassword, demoRole);
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate passwords match
+    if (signupPassword !== confirmPassword) {
       toast({
-        title: "Demo login successful",
-        description: `You're now signed in as a demo ${demoRole}.`,
+        title: "Passwords don't match",
+        description: "Please ensure both passwords match.",
+        variant: "destructive",
       });
+      return;
+    }
+    
+    // Validate password strength (optional)
+    if (signupPassword.length < 6) {
+      toast({
+        title: "Password too short",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsSigningUp(true);
+    
+    try {
+      await signup(signupEmail, signupPassword, signupRole);
     } catch (error) {
-      console.error('Demo login failed:', error);
+      console.error('Signup failed:', error);
+      // Error is handled by the auth context
     } finally {
-      setIsSubmitting(false);
+      setIsSigningUp(false);
     }
   };
 
@@ -69,7 +89,7 @@ const Login = () => {
       title: "AI Authentication Complete",
       description: "You can now proceed with login using your credentials",
     });
-    setActiveTab('standard');
+    setActiveTab('login');
   };
 
   return (
@@ -83,13 +103,15 @@ const Login = () => {
             <p className="mt-2 text-gray-600">Sign in to your account to continue</p>
           </div>
 
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'standard' | 'ai')}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="standard">Standard Login</TabsTrigger>
-              <TabsTrigger value="ai">AI Authentication</TabsTrigger>
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'login' | 'signup' | 'ai')}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              <TabsTrigger value="ai">AI Auth</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="standard">
+            {/* Login Tab */}
+            <TabsContent value="login">
               <Card>
                 <CardHeader>
                   <CardTitle>Sign In</CardTitle>
@@ -122,7 +144,7 @@ const Login = () => {
 
                     <div className="space-y-2">
                       <Label>Account Type</Label>
-                      <RadioGroup value={role} onValueChange={handleRoleChange} className="flex space-x-2">
+                      <RadioGroup value={role} onValueChange={(value) => setRole(value as UserRole)} className="flex space-x-2">
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="teacher" id="teacher" />
                           <Label htmlFor="teacher" className="cursor-pointer">Teacher</Label>
@@ -147,40 +169,103 @@ const Login = () => {
                   </form>
                 </CardContent>
                 <CardFooter className="flex flex-col space-y-4">
-                  <div className="relative w-full">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-200"></div>
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-gray-500">Or try a demo account</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 w-full">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleDemoLogin('teacher')}
-                      disabled={isSubmitting}
-                    >
-                      Demo Teacher
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleDemoLogin('student')}
-                      disabled={isSubmitting}
-                    >
-                      Demo Student
-                    </Button>
-                  </div>
                   <p className="text-center text-sm text-gray-500">
                     Don't have an account?{' '}
-                    <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
+                    <button 
+                      onClick={() => setActiveTab('signup')} 
+                      className="font-medium text-blue-600 hover:text-blue-500"
+                    >
                       Sign up now
-                    </a>
+                    </button>
                   </p>
                 </CardFooter>
               </Card>
             </TabsContent>
             
+            {/* Signup Tab */}
+            <TabsContent value="signup">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create Account</CardTitle>
+                  <CardDescription>Sign up for a new StudMeet account</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSignup} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signupEmail">Email</Label>
+                      <Input
+                        id="signupEmail"
+                        type="email"
+                        placeholder="name@example.com"
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="signupPassword">Password</Label>
+                      <Input
+                        id="signupPassword"
+                        type="password"
+                        placeholder="••••••••"
+                        value={signupPassword}
+                        onChange={(e) => setSignupPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirm Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Account Type</Label>
+                      <RadioGroup value={signupRole} onValueChange={(value) => setSignupRole(value as UserRole)} className="flex space-x-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="teacher" id="signupTeacher" />
+                          <Label htmlFor="signupTeacher" className="cursor-pointer">Teacher</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="student" id="signupStudent" />
+                          <Label htmlFor="signupStudent" className="cursor-pointer">Student</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+
+                    {error && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    <Button type="submit" className="w-full" disabled={isSigningUp}>
+                      {isSigningUp ? 'Creating Account...' : 'Create Account'}
+                    </Button>
+                  </form>
+                </CardContent>
+                <CardFooter className="flex flex-col space-y-4">
+                  <p className="text-center text-sm text-gray-500">
+                    Already have an account?{' '}
+                    <button 
+                      onClick={() => setActiveTab('login')} 
+                      className="font-medium text-blue-600 hover:text-blue-500"
+                    >
+                      Sign in
+                    </button>
+                  </p>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+            
+            {/* AI Authentication Tab */}
             <TabsContent value="ai">
               <Card>
                 <CardHeader>
