@@ -1,4 +1,3 @@
-
 import { StudentEmotion } from '../components/EmotionMetrics';
 
 // Mock student data
@@ -128,3 +127,31 @@ export const startEmotionDetection = (
  *   return emotion;
  * };
  */
+
+/**
+ * Generate a description of student emotions for AI analysis
+ */
+export const generateEmotionDescription = (emotions: StudentEmotion[]): string => {
+  // Count emotions
+  const counts = {
+    engaged: 0,
+    bored: 0,
+    sleepy: 0
+  };
+  
+  emotions.forEach(student => {
+    counts[student.emotion]++;
+  });
+  
+  // Generate a natural language description
+  const totalStudents = emotions.length;
+  return `In a classroom of ${totalStudents} students, ${counts.engaged} appear engaged, ${counts.bored} seem bored, and ${counts.sleepy} look sleepy. ${
+    counts.engaged > (totalStudents / 2) 
+      ? 'Most students are engaged with the material.' 
+      : counts.bored > (totalStudents / 2)
+        ? 'Most students seem bored with the current activity.'
+        : counts.sleepy > (totalStudents / 2)
+          ? 'Many students appear tired or sleepy.'
+          : 'Student engagement is mixed.'
+  }`;
+};
