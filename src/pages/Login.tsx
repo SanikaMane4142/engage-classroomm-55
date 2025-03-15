@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, UserRole } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
+import OpenAISetup from '../components/OpenAISetup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,13 +12,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('teacher');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'standard' | 'ai'>('standard');
   const { login, error } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -62,6 +64,14 @@ const Login = () => {
     }
   };
 
+  const handleAILoginComplete = () => {
+    toast({
+      title: "AI Authentication Complete",
+      description: "You can now proceed with login using your credentials",
+    });
+    setActiveTab('standard');
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -73,95 +83,116 @@ const Login = () => {
             <p className="mt-2 text-gray-600">Sign in to your account to continue</p>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Sign In</CardTitle>
-              <CardDescription>Enter your credentials to access your account</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="name@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Account Type</Label>
-                  <RadioGroup value={role} onValueChange={handleRoleChange} className="flex space-x-2">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="teacher" id="teacher" />
-                      <Label htmlFor="teacher" className="cursor-pointer">Teacher</Label>
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'standard' | 'ai')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="standard">Standard Login</TabsTrigger>
+              <TabsTrigger value="ai">AI Authentication</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="standard">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sign In</CardTitle>
+                  <CardDescription>Enter your credentials to access your account</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="name@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="student" id="student" />
-                      <Label htmlFor="student" className="cursor-pointer">Student</Label>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
                     </div>
-                  </RadioGroup>
-                </div>
 
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
+                    <div className="space-y-2">
+                      <Label>Account Type</Label>
+                      <RadioGroup value={role} onValueChange={handleRoleChange} className="flex space-x-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="teacher" id="teacher" />
+                          <Label htmlFor="teacher" className="cursor-pointer">Teacher</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="student" id="student" />
+                          <Label htmlFor="student" className="cursor-pointer">Student</Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
 
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? 'Signing in...' : 'Sign In'}
-                </Button>
-              </form>
-            </CardContent>
-            <CardFooter className="flex flex-col space-y-4">
-              <div className="relative w-full">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-200"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-white px-2 text-gray-500">Or try a demo account</span>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 w-full">
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleDemoLogin('teacher')}
-                  disabled={isSubmitting}
-                >
-                  Demo Teacher
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleDemoLogin('student')}
-                  disabled={isSubmitting}
-                >
-                  Demo Student
-                </Button>
-              </div>
-              <p className="text-center text-sm text-gray-500">
-                Don't have an account?{' '}
-                <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
-                  Sign up now
-                </a>
-              </p>
-            </CardFooter>
-          </Card>
+                    {error && (
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                      {isSubmitting ? 'Signing in...' : 'Sign In'}
+                    </Button>
+                  </form>
+                </CardContent>
+                <CardFooter className="flex flex-col space-y-4">
+                  <div className="relative w-full">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-500">Or try a demo account</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 w-full">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleDemoLogin('teacher')}
+                      disabled={isSubmitting}
+                    >
+                      Demo Teacher
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleDemoLogin('student')}
+                      disabled={isSubmitting}
+                    >
+                      Demo Student
+                    </Button>
+                  </div>
+                  <p className="text-center text-sm text-gray-500">
+                    Don't have an account?{' '}
+                    <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
+                      Sign up now
+                    </a>
+                  </p>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+            
+            <TabsContent value="ai">
+              <Card>
+                <CardHeader>
+                  <CardTitle>AI Authentication</CardTitle>
+                  <CardDescription>Use OpenAI to verify your identity</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <OpenAISetup forAuthentication={true} onSetupComplete={handleAILoginComplete} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>

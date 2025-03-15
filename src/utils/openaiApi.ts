@@ -72,6 +72,34 @@ export const generateChatCompletion = async (
 };
 
 /**
+ * Verify a user's identity using OpenAI
+ */
+export const verifyUserWithAI = async (userInput: string): Promise<boolean> => {
+  try {
+    const messages = [
+      {
+        role: 'system' as const,
+        content: 'You are an authentication assistant. Verify if the provided information looks like valid authentication data. Respond only with "true" or "false".'
+      },
+      {
+        role: 'user' as const,
+        content: `Verify this authentication attempt: ${userInput}`
+      }
+    ];
+
+    const response = await generateChatCompletion(messages, {
+      temperature: 0.1,
+      max_tokens: 10
+    });
+
+    return response.toLowerCase().includes('true');
+  } catch (error) {
+    console.error('Error verifying user with AI:', error);
+    return false;
+  }
+};
+
+/**
  * Analyze a prompt using OpenAI
  */
 export const analyzeEmotionWithAI = async (prompt: string): Promise<string> => {
