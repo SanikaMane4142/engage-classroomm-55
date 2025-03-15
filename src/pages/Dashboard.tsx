@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Video, Users, Calendar, Clock, Copy, Clipboard, ArrowRight, Activity, BarChart3, BookOpen } from 'lucide-react';
 
 // Mock recent meetings data
@@ -19,21 +21,22 @@ const recentMeetings = [
   { id: '3', name: 'Math Review', date: '2023-05-12', time: '02:00 PM', participants: 22, duration: '50 mins' },
 ];
 
-// Mock student engagement data
-const studentEngagementData = [
-  { id: '1', name: 'Alice Johnson', engagement: 'Engaged', lastActive: '2 mins ago', attention: '95%' },
-  { id: '2', name: 'Bob Smith', engagement: 'Bored', lastActive: '1 min ago', attention: '65%' },
-  { id: '3', name: 'Charlie Brown', engagement: 'Sleepy', lastActive: 'Just now', attention: '45%' },
-  { id: '4', name: 'Diana Prince', engagement: 'Engaged', lastActive: '3 mins ago', attention: '90%' },
-  { id: '5', name: 'Edward Stark', engagement: 'Bored', lastActive: '2 mins ago', attention: '70%' },
-];
-
 // Activities to recommend based on engagement levels
 const recommendedActivities = {
   Engaged: ['Advanced problem set', 'Group discussion leader', 'Peer tutoring'],
   Bored: ['Interactive quiz', 'Hands-on demonstration', 'Real-world application task'],
   Sleepy: ['Quick energizer activity', 'Stand-up problem solving', 'Multimedia presentation'],
 };
+
+interface StudentProfile {
+  id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: string;
+  engagement?: string;
+  lastActive?: string;
+  attention?: string;
+}
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -44,8 +47,93 @@ const Dashboard = () => {
   const [showJoinMeetingDialog, setShowJoinMeetingDialog] = useState(false);
   const [newMeetingName, setNewMeetingName] = useState('');
   const [joinMeetingLink, setJoinMeetingLink] = useState('');
+  const [students, setStudents] = useState<StudentProfile[]>([]);
 
   const isTeacher = user?.role === 'teacher';
+
+  // Fetch students from database
+  useEffect(() => {
+    if (isTeacher) {
+      const fetchStudents = async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'student');
+        
+        if (error) {
+          console.error('Error fetching students:', error);
+          toast({
+            variant: "destructive",
+            title: "Error fetching students",
+            description: error.message,
+          });
+        } else if (data) {
+          // Add mock engagement data for demo purposes
+          const studentsWithEngagement = data.map((student, index) => {
+            const engagementTypes = ['Engaged', 'Bored', 'Sleepy'];
+            const timeAgo = [`2 mins ago`, `1 min ago`, `Just now`, `3 mins ago`, `5 mins ago`];
+            const attentions = ['95%', '65%', '45%', '90%', '70%'];
+            
+            return {
+              ...student,
+              engagement: engagementTypes[index % engagementTypes.length],
+              lastActive: timeAgo[index % timeAgo.length],
+              attention: attentions[index % attentions.length],
+            };
+          });
+          
+          setStudents(studentsWithEngagement);
+        }
+      };
+
+      fetchStudents();
+
+      // Set up real-time listener for changes to profiles
+      const channel = supabase
+        .channel('schema-db-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'profiles',
+            filter: 'role=eq.student'
+          },
+          async (payload) => {
+            console.log('Real-time update received:', payload);
+            
+            // Refetch all students when there's a change
+            const { data, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('role', 'student');
+            
+            if (!error && data) {
+              // Add mock engagement data for demo purposes
+              const studentsWithEngagement = data.map((student, index) => {
+                const engagementTypes = ['Engaged', 'Bored', 'Sleepy'];
+                const timeAgo = [`2 mins ago`, `1 min ago`, `Just now`, `3 mins ago`, `5 mins ago`];
+                const attentions = ['95%', '65%', '45%', '90%', '70%'];
+                
+                return {
+                  ...student,
+                  engagement: engagementTypes[index % engagementTypes.length],
+                  lastActive: timeAgo[index % timeAgo.length],
+                  attention: attentions[index % attentions.length],
+                };
+              });
+              
+              setStudents(studentsWithEngagement);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [isTeacher, toast]);
 
   const handleStartNewMeeting = () => {
     // Generate a random meeting ID
@@ -128,8 +216,8 @@ const Dashboard = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">142</div>
-            <p className="text-xs text-muted-foreground">+12 from last month</p>
+            <div className="text-2xl font-bold">{students.length}</div>
+            <p className="text-xs text-muted-foreground">Real-time from database</p>
           </CardContent>
         </Card>
         <Card>
@@ -184,18 +272,19 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {studentEngagementData.slice(0, 4).map((student) => (
+              {students.slice(0, 4).map((student) => (
                 <div key={student.id} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center">
-                      {student.name.charAt(0)}
-                    </div>
+                    <Avatar>
+                      {student.avatar_url && <AvatarImage src={student.avatar_url} alt={student.display_name || 'Student'} />}
+                      <AvatarFallback>{student.display_name ? student.display_name[0] : 'S'}</AvatarFallback>
+                    </Avatar>
                     <div>
-                      <p className="text-sm font-medium">{student.name}</p>
+                      <p className="text-sm font-medium">{student.display_name || 'Student'}</p>
                       <p className="text-xs text-gray-500">Active {student.lastActive}</p>
                     </div>
                   </div>
-                  <div className={`px-2 py-1 rounded-full text-xs ${getEngagementBadgeClass(student.engagement)}`}>
+                  <div className={`px-2 py-1 rounded-full text-xs ${getEngagementBadgeClass(student.engagement || 'Engaged')}`}>
                     {student.engagement}
                   </div>
                 </div>
