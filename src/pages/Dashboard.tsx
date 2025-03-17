@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -6,13 +5,10 @@ import Navbar from '../components/Navbar';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/components/ui/use-toast';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Video, Users, Calendar, Clock, Copy, Clipboard, ArrowRight, Activity, BarChart3, BookOpen } from 'lucide-react';
+import { Video, Users, Calendar, Copy, Clipboard, ArrowRight, Activity, BarChart3, BookOpen } from 'lucide-react';
+import StudentDashboard from '@/components/StudentDashboard';
 
 // Mock recent meetings data
 const recentMeetings = [
@@ -112,7 +108,7 @@ const Dashboard = () => {
               // Add mock engagement data for demo purposes
               const studentsWithEngagement = data.map((student, index) => {
                 const engagementTypes = ['Engaged', 'Bored', 'Sleepy'];
-                const timeAgo = [`2 mins ago`, `1 min ago`, `Just now`, `3 mins ago`, `5 mins ago`];
+                const timeAgo = [`2 mins ago`, `Just now`, `3 mins ago`, `5 mins ago`];
                 const attentions = ['95%', '65%', '45%', '90%', '70%'];
                 
                 return {
@@ -354,180 +350,6 @@ const Dashboard = () => {
     </>
   );
 
-  const renderStudentDashboard = () => (
-    <>
-      <div className="grid gap-6 md:grid-cols-3 mb-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Courses Enrolled</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">5</div>
-            <p className="text-xs text-muted-foreground">Active this semester</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Classes Attended</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">18</div>
-            <p className="text-xs text-muted-foreground">This month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Engagement</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">82%</div>
-            <p className="text-xs text-muted-foreground">+3% from last week</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2 mb-6">
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Upcoming Classes</CardTitle>
-            <CardDescription>Your scheduled learning sessions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center space-x-4">
-                <div className="bg-blue-100 text-blue-800 p-3 rounded-lg">
-                  <Calendar className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium">Physics 101</h4>
-                  <p className="text-xs text-gray-500">Today, 10:00 AM - 11:30 AM</p>
-                </div>
-                <Button size="sm" variant="outline">Join</Button>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="bg-purple-100 text-purple-800 p-3 rounded-lg">
-                  <Calendar className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium">Mathematics</h4>
-                  <p className="text-xs text-gray-500">Tomorrow, 09:00 AM - 10:30 AM</p>
-                </div>
-                <Button size="sm" variant="outline" disabled>Join</Button>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="bg-green-100 text-green-800 p-3 rounded-lg">
-                  <Calendar className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium">Biology Lab</h4>
-                  <p className="text-xs text-gray-500">Wed, 02:00 PM - 04:00 PM</p>
-                </div>
-                <Button size="sm" variant="outline" disabled>Join</Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Your latest classroom interactions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start space-x-3">
-                <div className="mt-0.5">
-                  <Video className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-sm">
-                    <span className="font-medium">Chemistry Class</span>
-                    <span className="text-gray-500"> - You attended for 45 minutes</span>
-                  </p>
-                  <p className="text-xs text-gray-500">Yesterday at 11:30 AM</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="mt-0.5">
-                  <Activity className="h-5 w-5 text-green-500" />
-                </div>
-                <div>
-                  <p className="text-sm">
-                    <span className="font-medium">Physics Quiz</span>
-                    <span className="text-gray-500"> - You completed with 85% score</span>
-                  </p>
-                  <p className="text-xs text-gray-500">2 days ago at 3:15 PM</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="mt-0.5">
-                  <BarChart3 className="h-5 w-5 text-purple-500" />
-                </div>
-                <div>
-                  <p className="text-sm">
-                    <span className="font-medium">Math Class</span>
-                    <span className="text-gray-500"> - Your engagement was rated "Excellent"</span>
-                  </p>
-                  <p className="text-xs text-gray-500">3 days ago at 9:45 AM</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Engagement Metrics</CardTitle>
-          <CardDescription>How focused you've been in recent classes</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Physics</div>
-                <div className="text-sm font-medium text-green-600">92%</div>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500 rounded-full" style={{ width: '92%' }}></div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Mathematics</div>
-                <div className="text-sm font-medium text-green-600">88%</div>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500 rounded-full" style={{ width: '88%' }}></div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Chemistry</div>
-                <div className="text-sm font-medium text-yellow-600">74%</div>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-yellow-500 rounded-full" style={{ width: '74%' }}></div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Biology</div>
-                <div className="text-sm font-medium text-green-600">85%</div>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500 rounded-full" style={{ width: '85%' }}></div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  );
-
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
@@ -555,7 +377,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {isTeacher ? renderTeacherDashboard() : renderStudentDashboard()}
+        {isTeacher ? renderTeacherDashboard() : <StudentDashboard />}
       </main>
 
       {/* New Meeting Dialog */}
