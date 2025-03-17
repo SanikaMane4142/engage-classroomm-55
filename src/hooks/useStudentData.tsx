@@ -12,6 +12,7 @@ export interface CourseData {
   attendedClasses: number;
   totalClasses: number;
   engagementScore: number;
+  user_id?: string;
 }
 
 export interface ClassData {
@@ -21,6 +22,8 @@ export interface ClassData {
   startTime: string;
   endTime: string;
   attended: boolean;
+  course_id?: string;
+  user_id?: string;
 }
 
 export interface ActivityData {
@@ -31,6 +34,7 @@ export interface ActivityData {
   timestamp: string;
   score?: number;
   engagementRating?: string;
+  user_id?: string;
 }
 
 export function useStudentData() {
@@ -44,167 +48,148 @@ export function useStudentData() {
   const [recentActivities, setRecentActivities] = useState<ActivityData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Mock course data - in a real app, this would come from a database
   useEffect(() => {
     if (!user) return;
 
     setLoading(true);
 
-    // Mock data setup - would be replaced with actual database queries
-    const mockCourses: CourseData[] = [
-      { 
-        id: '1', 
-        name: 'Physics 101', 
-        completed: false, 
-        attendedClasses: 8, 
-        totalClasses: 12, 
-        engagementScore: 92 
-      },
-      { 
-        id: '2', 
-        name: 'Mathematics', 
-        completed: false, 
-        attendedClasses: 10, 
-        totalClasses: 14, 
-        engagementScore: 88 
-      },
-      { 
-        id: '3', 
-        name: 'Chemistry', 
-        completed: false, 
-        attendedClasses: 7, 
-        totalClasses: 12, 
-        engagementScore: 74 
-      },
-      { 
-        id: '4', 
-        name: 'Biology', 
-        completed: true, 
-        attendedClasses: 12, 
-        totalClasses: 12, 
-        engagementScore: 85 
-      },
-      { 
-        id: '5', 
-        name: 'History', 
-        completed: false, 
-        attendedClasses: 6, 
-        totalClasses: 10, 
-        engagementScore: 78 
+    // Function to fetch all student data from Supabase
+    const fetchStudentData = async () => {
+      try {
+        // Fetch courses
+        const { data: coursesData, error: coursesError } = await supabase
+          .from('courses')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (coursesError) throw coursesError;
+
+        // Fetch upcoming classes
+        const today = new Date().toISOString().split('T')[0];
+        const { data: classesData, error: classesError } = await supabase
+          .from('classes')
+          .select('*, courses(name)')
+          .eq('user_id', user.id)
+          .gte('date', today)
+          .order('date', { ascending: true })
+          .limit(3);
+
+        if (classesError) throw classesError;
+
+        // Fetch recent activities
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .from('activities')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('timestamp', { ascending: false })
+          .limit(3);
+
+        if (activitiesError) throw activitiesError;
+
+        // Process data
+        if (coursesData) {
+          setCourses(coursesData);
+          
+          // Calculate metrics
+          const totalAttended = coursesData.reduce((sum, course) => sum + course.attendedClasses, 0);
+          const avgEngagement = coursesData.reduce((sum, course) => sum + course.engagementScore, 0) / coursesData.length || 0;
+          const completedCoursesCount = coursesData.filter(course => course.completed).length;
+          
+          setCompletedClasses(completedCoursesCount);
+          setAttendedClasses(totalAttended);
+          setAverageEngagement(Math.round(avgEngagement));
+        }
+
+        if (classesData) {
+          // Format the class data
+          const formattedClasses = classesData.map(cls => ({
+            id: cls.id,
+            courseName: cls.courses?.name || 'Unknown Course',
+            date: cls.date,
+            startTime: cls.start_time,
+            endTime: cls.end_time,
+            attended: cls.attended
+          }));
+          
+          setUpcomingClasses(formattedClasses);
+        }
+
+        if (activitiesData) {
+          setRecentActivities(activitiesData);
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching student data:', error);
+        toast({
+          variant: "destructive",
+          title: "Error fetching data",
+          description: "Could not load your student data.",
+        });
+        setLoading(false);
       }
-    ];
-
-    // Current date for mock data
-    const today = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
-    const dayAfterTomorrow = new Date();
-    dayAfterTomorrow.setDate(today.getDate() + 2);
-
-    // Format dates for display
-    const formatDate = (date: Date) => {
-      return date.toISOString().split('T')[0];
     };
 
-    const mockUpcomingClasses: ClassData[] = [
-      {
-        id: '1',
-        courseName: 'Physics 101',
-        date: formatDate(today),
-        startTime: '10:00 AM',
-        endTime: '11:30 AM',
-        attended: false
-      },
-      {
-        id: '2',
-        courseName: 'Mathematics',
-        date: formatDate(tomorrow),
-        startTime: '09:00 AM',
-        endTime: '10:30 AM',
-        attended: false
-      },
-      {
-        id: '3',
-        courseName: 'Biology Lab',
-        date: formatDate(dayAfterTomorrow),
-        startTime: '02:00 PM',
-        endTime: '04:00 PM',
-        attended: false
-      }
-    ];
+    // Initial fetch
+    fetchStudentData();
 
-    // Generate mock recent activities
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(today.getDate() - 3);
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(today.getDate() - 2);
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    const mockActivities: ActivityData[] = [
-      {
-        id: '1',
-        type: 'attendance',
-        courseName: 'Chemistry',
-        description: 'You attended for 45 minutes',
-        timestamp: yesterday.toISOString()
-      },
-      {
-        id: '2',
-        type: 'quiz',
-        courseName: 'Physics Quiz',
-        description: 'You completed with 85% score',
-        timestamp: twoDaysAgo.toISOString(),
-        score: 85
-      },
-      {
-        id: '3',
-        type: 'engagement',
-        courseName: 'Math Class',
-        description: 'Your engagement was rated "Excellent"',
-        timestamp: threeDaysAgo.toISOString(),
-        engagementRating: 'Excellent'
-      }
-    ];
-
-    // Calculate totals based on mock data
-    const totalAttended = mockCourses.reduce((sum, course) => sum + course.attendedClasses, 0);
-    const avgEngagement = mockCourses.reduce((sum, course) => sum + course.engagementScore, 0) / mockCourses.length;
-    const completedCoursesCount = mockCourses.filter(course => course.completed).length;
-
-    // Update state with mock data
-    setCourses(mockCourses);
-    setUpcomingClasses(mockUpcomingClasses);
-    setCompletedClasses(completedCoursesCount);
-    setAttendedClasses(totalAttended);
-    setAverageEngagement(Math.round(avgEngagement));
-    setRecentActivities(mockActivities);
-    setLoading(false);
-
-    // Setup real-time listener for future integration with backend
-    const channel = supabase
-      .channel('student-dashboard-changes')
+    // Set up real-time subscription
+    const coursesChannel = supabase
+      .channel('student-courses-changes')
       .on(
         'postgres_changes',
         {
           event: '*',
-          schema: 'public'
+          schema: 'public',
+          table: 'courses',
+          filter: `user_id=eq.${user.id}`
         },
         (payload) => {
-          console.log('Real-time update received:', payload);
-          // In a real app, we would refetch data here or update specific pieces of state
-          // For now, we'll just show a notification
-          toast({
-            title: "Dashboard updated",
-            description: "New data has been received from the server.",
-          });
+          console.log('Real-time update for courses:', payload);
+          fetchStudentData(); // Refetch all data
         }
       )
       .subscribe();
 
-    // Cleanup function to remove channel subscription
+    const classesChannel = supabase
+      .channel('student-classes-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'classes',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Real-time update for classes:', payload);
+          fetchStudentData(); // Refetch all data
+        }
+      )
+      .subscribe();
+
+    const activitiesChannel = supabase
+      .channel('student-activities-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'activities',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Real-time update for activities:', payload);
+          fetchStudentData(); // Refetch all data
+        }
+      )
+      .subscribe();
+
+    // Cleanup function to remove channel subscriptions
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(coursesChannel);
+      supabase.removeChannel(classesChannel);
+      supabase.removeChannel(activitiesChannel);
     };
   }, [user, toast]);
 
