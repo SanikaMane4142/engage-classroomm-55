@@ -9,6 +9,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/components/ui/use-toast';
 import { Video, Users, Calendar, Copy, Clipboard, ArrowRight, Activity, BarChart3, BookOpen } from 'lucide-react';
 import StudentDashboard from '@/components/StudentDashboard';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 // Mock recent meetings data
 const recentMeetings = [
