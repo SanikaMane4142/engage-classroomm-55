@@ -21,10 +21,11 @@ import {
   attachMediaStream, 
   getDisplayMedia,
   createMultipleStudentStreams,
-  getVideoInputDevices
+  getVideoInputDevices,
+  checkCameraAccess
 } from '../utils/videoUtils';
 import { startEmotionDetection } from '../utils/emotionDetection';
-import { X, User, AlertTriangle, Users as UsersIcon } from 'lucide-react';
+import { X, User, AlertTriangle, Users as UsersIcon, Camera, CameraOff } from 'lucide-react';
 
 // Interface for student streams
 interface StudentStream {
@@ -57,6 +58,7 @@ const Meeting = () => {
   const [activeView, setActiveView] = useState<'grid' | 'speaker'>('grid');
   const [focusedStudent, setFocusedStudent] = useState<string | null>(null);
   const [videoCameraCount, setVideoCameraCount] = useState(0);
+  const [cameraAccessChecked, setCameraAccessChecked] = useState(false);
   
   // Emotion detection
   const [emotionData, setEmotionData] = useState<StudentEmotion[]>([]);
@@ -64,7 +66,6 @@ const Meeting = () => {
   
   // References to video elements
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   
   // Mock participants
   const participants = [
@@ -75,8 +76,21 @@ const Meeting = () => {
     { id: '5', name: 'Diana Prince', role: 'student', isActive: false },
   ];
   
+  // Check camera access first
+  useEffect(() => {
+    const checkCamera = async () => {
+      const cameraStatus = await checkCameraAccess();
+      console.log("Camera access check:", cameraStatus);
+      setCameraAccessChecked(true);
+    };
+    
+    checkCamera();
+  }, []);
+  
   // Initialize meeting with media access
   useEffect(() => {
+    if (!cameraAccessChecked) return;
+    
     const initializeMedia = async () => {
       try {
         console.log("Initializing media streams...");
@@ -86,8 +100,19 @@ const Meeting = () => {
         setVideoCameraCount(videoDevices.length);
         console.log(`Found ${videoDevices.length} camera devices in total`);
         
+        if (videoDevices.length === 0) {
+          toast({
+            variant: "warning",
+            title: "No cameras detected",
+            description: "Please check your camera permissions.",
+          });
+          setErrorMessage("No cameras detected. Please check your camera permissions.");
+          return;
+        }
+        
         // Get user media stream for the teacher
         const stream = await getUserMedia(true, true);
+        console.log("Teacher stream created:", stream.id);
         setLocalStream(stream);
         
         if (localVideoRef.current) {
@@ -161,17 +186,31 @@ const Meeting = () => {
       
       stopMediaStream(screenStream);
     };
-  }, [meetingId, toast, user?.role]);
+  }, [meetingId, toast, user?.role, cameraAccessChecked]);
   
   // Attach student streams to video elements when they're available
   useEffect(() => {
     console.log(`Attaching ${studentStreams.length} student streams to video elements`);
     studentStreams.forEach(student => {
-      if (student.videoRef?.current) {
-        console.log(`Attaching stream for student ${student.name}`);
+      if (student.videoRef?.current && student.stream) {
+        console.log(`Attaching stream ${student.stream.id} for student ${student.name}`);
         attachMediaStream(student.videoRef.current, student.stream);
+        
+        // Log video tracks info
+        const videoTracks = student.stream.getVideoTracks();
+        console.log(`Student ${student.name} has ${videoTracks.length} video tracks:`, 
+          videoTracks.map(t => ({ 
+            enabled: t.enabled, 
+            muted: t.muted, 
+            label: t.label,
+            id: t.id
+          }))
+        );
       } else {
-        console.warn(`Video ref for student ${student.name} is not available`);
+        console.warn(`Video ref or stream for student ${student.name} is not available`, {
+          hasRef: !!student.videoRef?.current,
+          hasStream: !!student.stream
+        });
       }
     });
   }, [studentStreams]);
@@ -311,16 +350,11 @@ const Meeting = () => {
     );
   }
   
-  // Create video refs for each student
-  const studentsWithRefs = studentStreams.map(student => ({
-    ...student,
-    videoRef: React.createRef<HTMLVideoElement>(),
-  }));
-  
   return (
     <div className="relative h-screen bg-black overflow-hidden">
       {videoCameraCount === 0 && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-600 text-white px-4 py-2 rounded-md">
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-600 text-white px-4 py-2 rounded-md flex items-center gap-2">
+          <CameraOff size={16} />
           No cameras detected. Please check your camera permissions.
         </div>
       )}
@@ -334,6 +368,14 @@ const Meeting = () => {
         >
           {activeView === 'grid' ? 'Speaker View' : 'Grid View'}
         </Button>
+      </div>
+      
+      {/* Camera count indicator */}
+      <div className="absolute top-4 left-4 z-20">
+        <div className="bg-black/50 text-white px-3 py-1 rounded-md flex items-center gap-2">
+          <Camera size={16} />
+          <span>Cameras: {videoCameraCount}</span>
+        </div>
       </div>
       
       {activeView === 'grid' ? (
@@ -354,7 +396,7 @@ const Meeting = () => {
           </div>
           
           {/* Student videos */}
-          {studentsWithRefs.map((student) => (
+          {studentStreams.map((student) => (
             <div 
               key={student.id} 
               className="relative rounded-lg overflow-hidden bg-gray-900 aspect-video cursor-pointer"
@@ -382,13 +424,13 @@ const Meeting = () => {
                 // Focused student video
                 <>
                   <video
-                    ref={studentsWithRefs.find(s => s.id === focusedStudent)?.videoRef}
+                    ref={studentStreams.find(s => s.id === focusedStudent)?.videoRef}
                     autoPlay
                     playsInline
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute bottom-4 left-4 bg-black/60 text-white px-2 py-1 text-md rounded">
-                    {studentsWithRefs.find(s => s.id === focusedStudent)?.name}
+                    {studentStreams.find(s => s.id === focusedStudent)?.name}
                   </div>
                 </>
               ) : (
@@ -430,7 +472,7 @@ const Meeting = () => {
               </div>
               
               {/* Student thumbnails */}
-              {studentsWithRefs.map((student) => (
+              {studentStreams.map((student) => (
                 <div 
                   key={student.id} 
                   className={`relative rounded-lg overflow-hidden bg-gray-900 h-full aspect-video cursor-pointer ${student.id === focusedStudent ? 'ring-2 ring-blue-500' : ''}`}
@@ -543,7 +585,7 @@ const Meeting = () => {
       
       {/* Emotion metrics for teachers */}
       {user?.role === 'teacher' && (
-        <div className="absolute top-4 left-4 z-10 w-80">
+        <div className="absolute top-16 left-4 z-10 w-80">
           <EmotionMetrics 
             emotionData={emotionData} 
             isVisible={showEmotionMetrics}

@@ -45,6 +45,12 @@ export const getUserMediaWithDeviceId = async (deviceId: string, audio = true) =
  */
 export const getVideoInputDevices = async () => {
   try {
+    // First request permission to access media devices
+    const initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    // Stop the stream immediately - we just needed it to get permissions
+    stopMediaStream(initialStream);
+    
+    // Now enumerate devices
     const devices = await navigator.mediaDevices.enumerateDevices();
     const videoDevices = devices.filter(device => device.kind === 'videoinput');
     console.log(`Found ${videoDevices.length} video devices:`, videoDevices);
@@ -89,7 +95,7 @@ export const attachMediaStream = (videoElement: HTMLVideoElement | null, stream:
     return;
   }
   
-  console.log("Attaching media stream to video element");
+  console.log("Attaching media stream to video element", stream.id);
   videoElement.srcObject = stream;
   
   // Ensure the video plays by handling the loadedmetadata event
@@ -126,13 +132,15 @@ export const createMultipleStudentStreams = async (count: number) => {
   const streams: { id: string; name: string; stream: MediaStream }[] = [];
   
   try {
+    // First request permission to access media devices
+    const initialStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    
     // Get all available video devices
     const videoDevices = await getVideoInputDevices();
+    console.log(`Detected ${videoDevices.length} camera devices`);
     
-    // First, determine which device we'll use for the teacher (local) stream
-    // We'll skip this device when assigning devices to students
-    const teacherStream = await getUserMedia(true, true);
-    const teacherTrack = teacherStream.getVideoTracks()[0];
+    // Teacher will use the device that's already active
+    const teacherTrack = initialStream.getVideoTracks()[0];
     const teacherDeviceId = teacherTrack ? teacherTrack.getSettings().deviceId : '';
     
     console.log(`Teacher using device ID: ${teacherDeviceId}`);
@@ -142,26 +150,35 @@ export const createMultipleStudentStreams = async (count: number) => {
       device.deviceId !== teacherDeviceId && device.deviceId !== ''
     );
     
-    console.log(`Found ${studentVideoDevices.length} available devices for students`);
+    console.log(`Found ${studentVideoDevices.length} additional devices for students`);
     
-    // Stop the teacher stream we just created for detection
-    stopMediaStream(teacherStream);
+    // Stop the initial stream as we'll create individual streams
+    stopMediaStream(initialStream);
     
-    // For each available device, create a student stream
+    // For real cameras: create a separate stream for each device
     for (let i = 0; i < Math.min(count, studentVideoDevices.length); i++) {
       try {
         const deviceId = studentVideoDevices[i].deviceId;
         console.log(`Creating stream for student ${i+1} with device ID: ${deviceId}`);
         
-        const stream = await getUserMediaWithDeviceId(deviceId, true);
+        // Create a new constraint for this specific device
+        const constraints = {
+          video: { 
+            deviceId: { exact: deviceId },
+            width: 640,  // Use smaller resolution
+            height: 480  // Use smaller resolution
+          },
+          audio: true
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log(`Successfully created stream with ID ${stream.id} for student ${i+1}`);
         
         streams.push({
           id: `${i + 1}`,
           name: getStudentName(i),
           stream,
         });
-        
-        console.log(`Successfully added real camera stream for student ${i+1}`);
       } catch (err) {
         console.error(`Failed to access real camera for student ${i+1}:`, err);
         // Fall back to canvas stream
@@ -174,19 +191,15 @@ export const createMultipleStudentStreams = async (count: number) => {
       }
     }
     
-    // If we couldn't get enough real cameras, create canvas streams for the rest
+    // If we need more streams than available cameras, create canvas streams
     for (let i = streams.length; i < count; i++) {
-      try {
-        console.log(`Creating canvas stream for student ${i+1} (not enough cameras)`);
-        const stream = await createCanvasStreamWithName(`Student ${i+1}`);
-        streams.push({
-          id: `${i + 1}`,
-          name: getStudentName(i),
-          stream,
-        });
-      } catch (error) {
-        console.error(`Failed to create stream for student ${i+1}:`, error);
-      }
+      console.log(`Creating canvas stream for student ${i+1} (not enough cameras)`);
+      const canvasStream = await createCanvasStreamWithName(`Student ${i+1}`);
+      streams.push({
+        id: `${i + 1}`,
+        name: getStudentName(i),
+        stream: canvasStream,
+      });
     }
     
     console.log(`Successfully created ${streams.length} student streams`);
@@ -286,18 +299,52 @@ const createCanvasStreamWithName = async (name: string) => {
     // @ts-ignore - Canvas captureStream is not in the TypeScript types
     const stream = canvas.captureStream(30);
     
-    // Add audio to the stream if possible
-    try {
-      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      const audioTrack = audioStream.getAudioTracks()[0];
-      stream.addTrack(audioTrack);
-    } catch (e) {
-      console.warn(`Could not add audio to stream for ${name}:`, e);
-    }
+    // Fake audio for canvas streams - no longer trying to add real audio
+    // since it would conflict with other streams
     
     return stream;
   } catch (error) {
     console.error(`Error creating canvas stream for ${name}:`, error);
     throw error;
+  }
+};
+
+/**
+ * Modified function to check camera access and capabilities
+ */
+export const checkCameraAccess = async () => {
+  try {
+    // Request camera permissions
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const tracks = stream.getVideoTracks();
+    
+    if (tracks.length === 0) {
+      return { success: false, message: "No camera detected", device: null };
+    }
+    
+    const deviceInfo = {
+      label: tracks[0].label,
+      id: tracks[0].getSettings().deviceId,
+      resolution: {
+        width: tracks[0].getSettings().width,
+        height: tracks[0].getSettings().height
+      }
+    };
+    
+    // Clean up
+    stopMediaStream(stream);
+    
+    return {
+      success: true,
+      message: "Camera access granted",
+      device: deviceInfo
+    };
+  } catch (err) {
+    console.error("Camera access error:", err);
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : "Unknown camera error",
+      device: null
+    };
   }
 };
