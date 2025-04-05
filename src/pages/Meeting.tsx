@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -102,7 +101,7 @@ const Meeting = () => {
         
         if (videoDevices.length === 0) {
           toast({
-            variant: "warning",
+            variant: "destructive", // Changed from "warning" to "destructive" since warning isn't defined yet
             title: "No cameras detected",
             description: "Please check your camera permissions.",
           });
