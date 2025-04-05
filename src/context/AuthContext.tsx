@@ -23,6 +23,7 @@ interface AuthContextType {
   signup: (email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
+  connectionError: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,61 +32,87 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<boolean>(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const formatUser = async (session: Session | null): Promise<User | null> => {
     if (!session?.user) return null;
 
-    // Get user profile from the profiles table
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
+    try {
+      // Get user profile from the profiles table
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
 
-    if (error) {
-      console.error('Error fetching user profile:', error);
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return null;
+      }
+
+      return {
+        id: session.user.id,
+        name: profile.display_name || session.user.email?.split('@')[0] || 'User',
+        email: session.user.email || '',
+        role: profile.role as UserRole,
+        avatar: profile.avatar_url,
+      };
+    } catch (error) {
+      console.error('Error formatting user:', error);
       return null;
     }
-
-    return {
-      id: session.user.id,
-      name: profile.display_name || session.user.email?.split('@')[0] || 'User',
-      email: session.user.email || '',
-      role: profile.role as UserRole,
-      avatar: profile.avatar_url,
-    };
   };
 
   // Check for existing session on mount
   useEffect(() => {
     const initializeAuth = async () => {
       setIsLoading(true);
+      setConnectionError(false);
       
-      // Get the current session
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        const formattedUser = await formatUser(session);
-        setUser(formattedUser);
-      }
-      
-      setIsLoading(false);
-      
-      // Listen for auth changes
-      const { data: { subscription } } = await supabase.auth.onAuthStateChange(
-        async (_event, session) => {
+      try {
+        // Get the current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          setConnectionError(true);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (session) {
           const formattedUser = await formatUser(session);
           setUser(formattedUser);
-          setIsLoading(false);
         }
-      );
-      
-      // Cleanup subscription on unmount
-      return () => {
-        subscription.unsubscribe();
-      };
+        
+        // Listen for auth changes
+        const { data: { subscription } } = await supabase.auth.onAuthStateChange(
+          async (_event, session) => {
+            try {
+              const formattedUser = await formatUser(session);
+              setUser(formattedUser);
+              setIsLoading(false);
+            } catch (error) {
+              console.error('Auth state change error:', error);
+              setIsLoading(false);
+              setConnectionError(true);
+            }
+          }
+        );
+        
+        setIsLoading(false);
+        
+        // Cleanup subscription on unmount
+        return () => {
+          subscription.unsubscribe();
+        };
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        setIsLoading(false);
+        setConnectionError(true);
+      }
     };
     
     initializeAuth();
@@ -94,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
+    setConnectionError(false);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -112,12 +140,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
     } catch (e) {
       if (e instanceof Error) {
-        setError(e.message);
-        toast({
-          title: 'Login failed',
-          description: e.message,
-          variant: 'destructive',
-        });
+        if (e.message.includes('fetch') || e.message.includes('network') || e.message.includes('connect')) {
+          setConnectionError(true);
+          setError('Unable to connect to the authentication service. Please check your internet connection and try again.');
+          toast({
+            title: 'Connection error',
+            description: 'Unable to connect to the authentication service. Please check your internet connection and try again.',
+            variant: 'destructive',
+          });
+        } else {
+          setError(e.message);
+          toast({
+            title: 'Login failed',
+            description: e.message,
+            variant: 'destructive',
+          });
+        }
       } else {
         setError('An unknown error occurred');
         toast({
@@ -135,6 +173,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (email: string, password: string, role: UserRole) => {
     setIsLoading(true);
     setError(null);
+    setConnectionError(false);
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -166,12 +205,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (e) {
       if (e instanceof Error) {
-        setError(e.message);
-        toast({
-          title: 'Signup failed',
-          description: e.message,
-          variant: 'destructive',
-        });
+        if (e.message.includes('fetch') || e.message.includes('network') || e.message.includes('connect')) {
+          setConnectionError(true);
+          setError('Unable to connect to the authentication service. Please check your internet connection and try again.');
+          toast({
+            title: 'Connection error',
+            description: 'Unable to connect to the authentication service. Please check your internet connection and try again.',
+            variant: 'destructive',
+          });
+        } else {
+          setError(e.message);
+          toast({
+            title: 'Signup failed',
+            description: e.message,
+            variant: 'destructive',
+          });
+        }
       } else {
         setError('An unknown error occurred');
         toast({
@@ -213,6 +262,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signup,
     logout,
     error,
+    connectionError,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

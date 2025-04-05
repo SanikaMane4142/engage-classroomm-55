@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 
 const Login = () => {
@@ -31,7 +31,7 @@ const Login = () => {
   // UI state
   const [activeTab, setActiveTab] = useState<'login' | 'signup' | 'ai'>('login');
   
-  const { login, signup, error } = useAuth();
+  const { login, signup, error, connectionError } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -103,6 +103,16 @@ const Login = () => {
             <p className="mt-2 text-gray-600">Sign in to your account to continue</p>
           </div>
 
+          {connectionError && (
+            <Alert variant="destructive" className="mb-4">
+              <WifiOff className="h-4 w-4" />
+              <AlertTitle>Connection Error</AlertTitle>
+              <AlertDescription>
+                Unable to connect to the authentication service. Please check your internet connection and try again.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'login' | 'signup' | 'ai')}>
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="login">Login</TabsTrigger>
@@ -156,16 +166,27 @@ const Login = () => {
                       </RadioGroup>
                     </div>
 
-                    {error && (
+                    {error && !connectionError && (
                       <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>{error}</AlertDescription>
                       </Alert>
                     )}
 
-                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                    <Button type="submit" className="w-full" disabled={isSubmitting || connectionError}>
                       {isSubmitting ? 'Signing in...' : 'Sign In'}
                     </Button>
+
+                    {/* Demo mode for development */}
+                    {import.meta.env.DEV && (
+                      <Alert className="mt-4 bg-amber-50 border-amber-200">
+                        <Wifi className="h-4 w-4 text-amber-500" />
+                        <AlertTitle className="text-amber-700">Developer Mode</AlertTitle>
+                        <AlertDescription className="text-amber-600">
+                          This is a demo environment. You can use test@example.com / password123 to sign in.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </form>
                 </CardContent>
                 <CardFooter className="flex flex-col space-y-4">
@@ -239,14 +260,14 @@ const Login = () => {
                       </RadioGroup>
                     </div>
 
-                    {error && (
+                    {error && !connectionError && (
                       <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>{error}</AlertDescription>
                       </Alert>
                     )}
 
-                    <Button type="submit" className="w-full" disabled={isSigningUp}>
+                    <Button type="submit" className="w-full" disabled={isSigningUp || connectionError}>
                       {isSigningUp ? 'Creating Account...' : 'Create Account'}
                     </Button>
                   </form>
