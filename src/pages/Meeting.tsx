@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -19,12 +20,13 @@ import {
   stopMediaStream, 
   attachMediaStream, 
   getDisplayMedia,
-  createMultipleStudentStreams,
   getVideoInputDevices,
   checkCameraAccess
 } from '../utils/videoUtils';
+import { webRTCService } from '../utils/webRTCService';
 import { startEmotionDetection } from '../utils/emotionDetection';
 import { X, User, AlertTriangle, Users as UsersIcon, Camera, CameraOff } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 // Interface for student streams
 interface StudentStream {
@@ -58,6 +60,7 @@ const Meeting = () => {
   const [focusedStudent, setFocusedStudent] = useState<string | null>(null);
   const [videoCameraCount, setVideoCameraCount] = useState(0);
   const [cameraAccessChecked, setCameraAccessChecked] = useState(false);
+  const [isWebRTCConnected, setIsWebRTCConnected] = useState(false);
   
   // Emotion detection
   const [emotionData, setEmotionData] = useState<StudentEmotion[]>([]);
@@ -66,14 +69,92 @@ const Meeting = () => {
   // References to video elements
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   
-  // Mock participants
-  const participants = [
-    { id: '1', name: 'Teacher Smith', role: 'teacher', isActive: true },
-    { id: '2', name: 'Alice Johnson', role: 'student', isActive: true },
-    { id: '3', name: 'Bob Smith', role: 'student', isActive: true },
-    { id: '4', name: 'Charlie Brown', role: 'student', isActive: true },
-    { id: '5', name: 'Diana Prince', role: 'student', isActive: false },
-  ];
+  // WebRTC initialization
+  useEffect(() => {
+    if (!meetingId || !user) return;
+    
+    const userName = user.email || 'Anonymous User';
+    const userId = user.id || 'anonymous-user';
+    
+    // Initialize WebRTC with callbacks
+    const initWebRTC = async () => {
+      if (localStream) {
+        await webRTCService.initialize(
+          localStream, 
+          meetingId,
+          userId,
+          userName, 
+          {
+            onRemoteStream: handleRemoteStream,
+            onPeerDisconnected: handlePeerDisconnected
+          }
+        );
+        setIsWebRTCConnected(true);
+        
+        toast({
+          title: "WebRTC initialized",
+          description: "Successfully connected to the meeting room."
+        });
+      }
+    };
+    
+    if (localStream && !isWebRTCConnected) {
+      initWebRTC();
+    }
+    
+    // Clean up WebRTC connections when leaving
+    return () => {
+      if (isWebRTCConnected) {
+        webRTCService.leaveRoom();
+        setIsWebRTCConnected(false);
+      }
+    };
+  }, [meetingId, localStream, user, toast, isWebRTCConnected]);
+  
+  // Handler for new remote streams
+  const handleRemoteStream = (stream: MediaStream, peerId: string, peerName: string) => {
+    console.log(`Received remote stream from peer ${peerName} (${peerId})`);
+    
+    const newStudent: StudentStream = {
+      id: peerId,
+      name: peerName,
+      stream: stream,
+      videoRef: React.createRef<HTMLVideoElement>()
+    };
+    
+    setStudentStreams(prev => {
+      // Check if we already have this student
+      const existingIndex = prev.findIndex(s => s.id === peerId);
+      if (existingIndex >= 0) {
+        // Update existing entry
+        const updated = [...prev];
+        updated[existingIndex] = newStudent;
+        return updated;
+      } else {
+        // Add new entry
+        return [...prev, newStudent];
+      }
+    });
+    
+    toast({
+      title: "New participant joined",
+      description: `${peerName} has joined the meeting.`
+    });
+  };
+  
+  // Handler for peer disconnections
+  const handlePeerDisconnected = (peerId: string) => {
+    console.log(`Peer ${peerId} disconnected`);
+    
+    const disconnectedName = studentStreams.find(s => s.id === peerId)?.name || 'A participant';
+    
+    setStudentStreams(prev => prev.filter(s => s.id !== peerId));
+    
+    toast({
+      title: "Participant left",
+      description: `${disconnectedName} has left the meeting.`
+    });
+  };
   
   // Check camera access first
   useEffect(() => {
@@ -101,7 +182,7 @@ const Meeting = () => {
         
         if (videoDevices.length === 0) {
           toast({
-            variant: "destructive", // Changed from "warning" to "destructive" since warning isn't defined yet
+            variant: "destructive",
             title: "No cameras detected",
             description: "Please check your camera permissions.",
           });
@@ -121,30 +202,10 @@ const Meeting = () => {
           console.error("Local video element reference is null");
         }
         
-        // Create student streams with real cameras where possible
-        console.log("Creating student streams with real cameras");
-        const mockStudents = await createMultipleStudentStreams(4);
-        
-        // Add video refs to each student
-        const studentsWithRefs = mockStudents.map(student => ({
-          ...student,
-          videoRef: React.createRef<HTMLVideoElement>(),
-        }));
-        
-        setStudentStreams(studentsWithRefs);
-        
-        // Count real camera streams vs canvas streams
-        const realCameraCount = mockStudents.filter(s => 
-          s.stream.getVideoTracks()[0]?.label && 
-          !s.stream.getVideoTracks()[0]?.label.includes('canvas')
-        ).length;
-        
-        console.log(`Successfully created ${mockStudents.length} student streams (${realCameraCount} with real cameras)`);
-        
         // Show success message
         toast({
           title: "Connected to meeting",
-          description: `You've joined meeting ID: ${meetingId} with ${mockStudents.length} students`,
+          description: `You've joined meeting ID: ${meetingId}`,
         });
         
         // Start emotion detection if user is a teacher
@@ -247,6 +308,11 @@ const Meeting = () => {
       attachMediaStream(localVideoRef.current, localStream);
       setIsScreenSharing(false);
       
+      // Update WebRTC with camera stream instead of screen
+      if (isWebRTCConnected) {
+        webRTCService.updateLocalStream(localStream);
+      }
+      
       toast({
         title: "Screen sharing stopped",
       });
@@ -260,10 +326,20 @@ const Meeting = () => {
         attachMediaStream(localVideoRef.current, displayStream);
         setIsScreenSharing(true);
         
+        // Update WebRTC with screen stream instead of camera
+        if (isWebRTCConnected) {
+          webRTCService.updateLocalStream(displayStream);
+        }
+        
         // Set up listener for when user stops sharing via browser UI
         displayStream.getVideoTracks()[0].onended = () => {
           attachMediaStream(localVideoRef.current, localStream);
           setIsScreenSharing(false);
+          
+          // Update WebRTC back to camera stream
+          if (isWebRTCConnected) {
+            webRTCService.updateLocalStream(localStream);
+          }
           
           toast({
             title: "Screen sharing stopped",
@@ -287,6 +363,12 @@ const Meeting = () => {
   
   // End meeting
   const endMeeting = () => {
+    // Leave WebRTC room
+    if (isWebRTCConnected) {
+      webRTCService.leaveRoom();
+      setIsWebRTCConnected(false);
+    }
+    
     // Stop all media streams
     stopMediaStream(localStream);
     
@@ -358,6 +440,23 @@ const Meeting = () => {
         </div>
       )}
       
+      {/* Connection status */}
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-40">
+        <div className="bg-black/50 text-white px-3 py-1 rounded-md flex items-center gap-2">
+          {isWebRTCConnected ? (
+            <>
+              <span className="w-3 h-3 rounded-full bg-green-500"></span>
+              <span>Connected to room: {meetingId}</span>
+            </>
+          ) : (
+            <>
+              <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
+              <span>Connecting to WebRTC...</span>
+            </>
+          )}
+        </div>
+      </div>
+      
       {/* View toggle button */}
       <div className="absolute top-4 right-4 z-20">
         <Button 
@@ -390,7 +489,7 @@ const Meeting = () => {
               className="w-full h-full object-cover"
             />
             <div className="absolute bottom-2 left-2 bg-black/60 text-white px-2 py-0.5 text-sm rounded">
-              You (Teacher)
+              You {user?.role === 'teacher' ? '(Teacher)' : ''}
             </div>
           </div>
           
@@ -443,7 +542,7 @@ const Meeting = () => {
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute bottom-4 left-4 bg-black/60 text-white px-2 py-1 text-md rounded">
-                    You (Teacher)
+                    You {user?.role === 'teacher' ? '(Teacher)' : ''}
                   </div>
                 </>
               )}
@@ -512,23 +611,38 @@ const Meeting = () => {
       <Sheet open={isParticipantsOpen} onOpenChange={setIsParticipantsOpen}>
         <SheetContent side="right" className="w-[300px] sm:w-[400px] p-0">
           <SheetHeader className="p-4 border-b">
-            <SheetTitle>Participants ({participants.length})</SheetTitle>
+            <SheetTitle>Participants ({1 + studentStreams.length})</SheetTitle>
           </SheetHeader>
           <ScrollArea className="h-[calc(100vh-64px)]">
             <div className="p-4 space-y-4">
-              {participants.map((participant) => (
+              {/* Current user */}
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                  <User className="h-5 w-5 text-gray-500" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium">
+                    You {user?.role === 'teacher' ? '(Teacher)' : ''}
+                  </p>
+                  <p className="text-xs text-gray-500 capitalize">{user?.email || 'Anonymous'}</p>
+                </div>
+                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              </div>
+              
+              {/* Remote participants */}
+              {studentStreams.map((student) => (
                 <div 
-                  key={participant.id}
+                  key={student.id}
                   className="flex items-center space-x-3"
                 >
                   <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
                     <User className="h-5 w-5 text-gray-500" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium">{participant.name}</p>
-                    <p className="text-xs text-gray-500 capitalize">{participant.role}</p>
+                    <p className="font-medium">{student.name}</p>
+                    <p className="text-xs text-gray-500 capitalize">Student</p>
                   </div>
-                  <div className={`w-3 h-3 rounded-full ${participant.isActive ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
                 </div>
               ))}
             </div>
@@ -547,23 +661,16 @@ const Meeting = () => {
               <div className="space-y-4">
                 <div className="flex flex-col items-start">
                   <div className="bg-gray-100 rounded-lg p-3 mb-1 max-w-[80%]">
-                    <p className="text-sm">Has everyone completed the homework assignment?</p>
+                    <p className="text-sm">Has everyone connected to the WebRTC server?</p>
                   </div>
-                  <span className="text-xs text-gray-500">Teacher Smith • 10:15 AM</span>
+                  <span className="text-xs text-gray-500">Teacher • 10:15 AM</span>
                 </div>
                 
                 <div className="flex flex-col items-end">
                   <div className="bg-blue-100 rounded-lg p-3 mb-1 max-w-[80%]">
-                    <p className="text-sm">Yes, I submitted mine yesterday.</p>
+                    <p className="text-sm">Yes, my video is streaming correctly.</p>
                   </div>
                   <span className="text-xs text-gray-500">You • 10:16 AM</span>
-                </div>
-                
-                <div className="flex flex-col items-start">
-                  <div className="bg-gray-100 rounded-lg p-3 mb-1 max-w-[80%]">
-                    <p className="text-sm">I had a question about problem #3. Can we review it?</p>
-                  </div>
-                  <span className="text-xs text-gray-500">Alice Johnson • 10:17 AM</span>
                 </div>
               </div>
             </ScrollArea>
