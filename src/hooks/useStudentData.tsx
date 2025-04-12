@@ -181,7 +181,7 @@ export function useStudentData() {
         }
 
         if (useRealData) {
-          // Attempt to fetch real data
+          // Attempt to fetch real data from Supabase
           console.log('Attempting to fetch real data from Supabase');
           
           // This code would work if the tables exist in Supabase
