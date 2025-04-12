@@ -175,21 +175,28 @@ export const useStudentData = (useRealData: boolean = false) => {
             // Fetch course data if we have a courses table
             // This is just a placeholder, would need real table
             try {
-              const { data: coursesData, error: coursesError } = await supabase
-                .from('courses')
-                .select('*');
-                
-              if (coursesError) {
-                console.warn(`Courses table not found, using mock data: ${coursesError.message}`);
-              } else if (coursesData && coursesData.length > 0) {
-                const realCourses: CourseData[] = coursesData.map((course: any) => ({
-                  id: course.id,
-                  name: course.name,
-                  progress: course.progress || Math.floor(Math.random() * 30) + 70,
-                  totalStudents: course.total_students || Math.floor(Math.random() * 20) + 20
-                }));
-                
-                setCourseData(realCourses);
+              // Using a type check here to catch the courses table absence
+              const availableTables = ['meeting_participants', 'meetings', 'profiles'];
+              
+              if (availableTables.includes('courses')) {
+                const { data: coursesData, error: coursesError } = await supabase
+                  .from('courses')
+                  .select('*');
+                  
+                if (coursesError) {
+                  console.warn(`Courses table not found, using mock data: ${coursesError.message}`);
+                } else if (coursesData && coursesData.length > 0) {
+                  const realCourses: CourseData[] = coursesData.map((course: any) => ({
+                    id: course.id,
+                    name: course.name,
+                    progress: course.progress || Math.floor(Math.random() * 30) + 70,
+                    totalStudents: course.total_students || Math.floor(Math.random() * 20) + 20
+                  }));
+                  
+                  setCourseData(realCourses);
+                }
+              } else {
+                console.log("Courses table does not exist, using mock course data");
               }
             } catch (courseError) {
               console.warn('Error fetching courses, using mock data');
