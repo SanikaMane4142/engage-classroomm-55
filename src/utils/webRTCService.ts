@@ -63,6 +63,8 @@ export class WebRTCService {
   private iceServers: RTCIceServer[];
   private callbacks: WebRTCCallbacks;
   private supabaseChannel: any;
+  private connectionAttempts: Map<string, number>;
+  private maxConnectionAttempts: number = 3;
 
   constructor() {
     this.peerConnections = new Map();
@@ -70,10 +72,13 @@ export class WebRTCService {
     this.roomId = '';
     this.userId = '';
     this.userName = '';
+    this.connectionAttempts = new Map();
     this.iceServers = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' }
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' }
     ];
     this.callbacks = {
       onRemoteStream: () => {},
@@ -159,15 +164,19 @@ export class WebRTCService {
   private async handleSignalingMessage(message: SignalingMessage): Promise<void> {
     console.log(`Received signaling message of type: ${message.type}`, message);
     
-    // Ignore messages from self
-    if (message.type !== 'leave' && message.senderId === this.userId) {
+    // Ignore messages from self except for 'join' messages which we need to respond to
+    if (message.type !== 'leave' && message.type !== 'join' && message.senderId === this.userId) {
+      console.log('Ignoring message from self');
       return;
     }
     
     switch (message.type) {
       case 'join':
-        // Someone joined, send them an offer
-        await this.createPeerConnection(message.senderId, message.senderName);
+        // Someone joined, send them an offer if it's not us
+        if (message.senderId !== this.userId) {
+          console.log(`Peer ${message.senderName} joined, creating peer connection`);
+          await this.createPeerConnection(message.senderId, message.senderName);
+        }
         break;
         
       case 'offer':
@@ -200,9 +209,18 @@ export class WebRTCService {
     if (this.peerConnections.has(peerId)) {
       const existingConnection = this.peerConnections.get(peerId);
       if (existingConnection) {
+        console.log(`Connection already exists for peer ${peerName}, returning existing connection`);
         return existingConnection.connection;
       }
     }
+    
+    // Track connection attempts
+    const attempts = this.connectionAttempts.get(peerId) || 0;
+    if (attempts >= this.maxConnectionAttempts) {
+      console.error(`Maximum connection attempts reached for peer ${peerName}`);
+      throw new Error(`Maximum connection attempts reached for peer ${peerName}`);
+    }
+    this.connectionAttempts.set(peerId, attempts + 1);
     
     // Create new RTCPeerConnection
     const peerConnection = new RTCPeerConnection({ iceServers: this.iceServers });
@@ -216,22 +234,35 @@ export class WebRTCService {
     
     // Add local tracks to the connection
     if (this.localStream) {
+      console.log(`Adding ${this.localStream.getTracks().length} local tracks to peer connection for ${peerName}`);
       this.localStream.getTracks().forEach(track => {
         if (this.localStream) {
           peerConnection.addTrack(track, this.localStream);
         }
       });
+    } else {
+      console.warn('No local stream available to add to peer connection');
     }
     
     // Handle ICE candidates
     peerConnection.onicecandidate = async (event) => {
       if (event.candidate) {
+        console.log(`Sending ICE candidate to ${peerName}`);
         await this.sendSignalingMessage({
           type: 'candidate',
           candidate: event.candidate.toJSON(),
           senderId: this.userId,
           senderName: this.userName
         });
+      }
+    };
+    
+    // Handle ICE connection state changes
+    peerConnection.oniceconnectionstatechange = () => {
+      console.log(`ICE connection state with ${peerName}: ${peerConnection.iceConnectionState}`);
+      if (peerConnection.iceConnectionState === 'failed') {
+        console.log(`ICE connection failed with ${peerName}, restarting`);
+        peerConnection.restartIce();
       }
     };
     
@@ -247,11 +278,16 @@ export class WebRTCService {
     
     // Handle incoming streams
     peerConnection.ontrack = (event) => {
-      console.log(`Received track from ${peerName}`);
+      console.log(`Received track from ${peerName}:`, event.track);
+      
+      // Create a new MediaStream with all tracks from the remote peer
       const remoteStream = new MediaStream();
       event.streams[0].getTracks().forEach(track => {
+        console.log(`Adding track ${track.kind}:${track.id} to remote stream for ${peerName}`);
         remoteStream.addTrack(track);
       });
+      
+      console.log(`Created remote stream for ${peerName} with ${remoteStream.getTracks().length} tracks`);
       
       const peerInfo = this.peerConnections.get(peerId);
       if (peerInfo) {
@@ -259,14 +295,17 @@ export class WebRTCService {
         this.peerConnections.set(peerId, peerInfo);
       }
       
+      // Notify callback with the new stream
       this.callbacks.onRemoteStream(remoteStream, peerId, peerName);
     };
     
     // Create and send offer if we initiated the connection
     try {
+      console.log(`Creating offer for ${peerName}`);
       const offer = await peerConnection.createOffer();
       await peerConnection.setLocalDescription(offer);
       
+      console.log(`Sending offer to ${peerName}`);
       await this.sendSignalingMessage({
         type: 'offer',
         offer: offer,
@@ -274,7 +313,11 @@ export class WebRTCService {
         senderName: this.userName
       });
     } catch (error) {
-      console.error('Error creating offer:', error);
+      console.error(`Error creating offer for ${peerName}:`, error);
+      // Clean up on error
+      peerConnection.close();
+      this.peerConnections.delete(peerId);
+      throw error;
     }
     
     return peerConnection;
@@ -288,8 +331,10 @@ export class WebRTCService {
     
     // Get or create peer connection
     if (this.peerConnections.has(message.senderId)) {
+      console.log(`Using existing connection for ${message.senderName}`);
       peerConnection = this.peerConnections.get(message.senderId)!.connection;
     } else {
+      console.log(`Creating new connection for ${message.senderName} from offer`);
       peerConnection = new RTCPeerConnection({ iceServers: this.iceServers });
       
       this.peerConnections.set(message.senderId, {
@@ -300,22 +345,35 @@ export class WebRTCService {
       
       // Add local tracks
       if (this.localStream) {
+        console.log(`Adding ${this.localStream.getTracks().length} local tracks to peer connection for ${message.senderName}`);
         this.localStream.getTracks().forEach(track => {
           if (this.localStream) {
             peerConnection.addTrack(track, this.localStream);
           }
         });
+      } else {
+        console.warn('No local stream available to add to peer connection');
       }
       
       // Handle ICE candidates
       peerConnection.onicecandidate = async (event) => {
         if (event.candidate) {
+          console.log(`Sending ICE candidate to ${message.senderName}`);
           await this.sendSignalingMessage({
             type: 'candidate',
             candidate: event.candidate.toJSON(),
             senderId: this.userId,
             senderName: this.userName
           });
+        }
+      };
+      
+      // Handle ICE connection state changes
+      peerConnection.oniceconnectionstatechange = () => {
+        console.log(`ICE connection state with ${message.senderName}: ${peerConnection.iceConnectionState}`);
+        if (peerConnection.iceConnectionState === 'failed') {
+          console.log(`ICE connection failed with ${message.senderName}, restarting`);
+          peerConnection.restartIce();
         }
       };
       
@@ -331,11 +389,16 @@ export class WebRTCService {
       
       // Handle incoming streams
       peerConnection.ontrack = (event) => {
-        console.log(`Received track from ${message.senderName}`);
+        console.log(`Received track from ${message.senderName}:`, event.track);
+        
+        // Create a new MediaStream with all tracks from the remote peer
         const remoteStream = new MediaStream();
         event.streams[0].getTracks().forEach(track => {
+          console.log(`Adding track ${track.kind}:${track.id} to remote stream for ${message.senderName}`);
           remoteStream.addTrack(track);
         });
+        
+        console.log(`Created remote stream for ${message.senderName} with ${remoteStream.getTracks().length} tracks`);
         
         const peerInfo = this.peerConnections.get(message.senderId);
         if (peerInfo) {
@@ -343,16 +406,20 @@ export class WebRTCService {
           this.peerConnections.set(message.senderId, peerInfo);
         }
         
+        // Notify callback with the new stream
         this.callbacks.onRemoteStream(remoteStream, message.senderId, message.senderName);
       };
     }
     
     try {
+      console.log(`Setting remote description for ${message.senderName}`);
       await peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
       
+      console.log(`Creating answer for ${message.senderName}`);
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
       
+      console.log(`Sending answer to ${message.senderName}`);
       await this.sendSignalingMessage({
         type: 'answer',
         answer: answer,
@@ -360,7 +427,7 @@ export class WebRTCService {
         senderName: this.userName
       });
     } catch (error) {
-      console.error('Error handling offer:', error);
+      console.error(`Error handling offer from ${message.senderName}:`, error);
     }
   }
 
@@ -376,9 +443,11 @@ export class WebRTCService {
     }
     
     try {
+      console.log(`Setting remote description from answer for ${message.senderName}`);
       await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+      console.log(`Remote description set successfully for ${message.senderName}`);
     } catch (error) {
-      console.error('Error handling answer:', error);
+      console.error(`Error handling answer from ${message.senderName}:`, error);
     }
   }
 
@@ -395,10 +464,12 @@ export class WebRTCService {
     
     try {
       if (message.candidate) {
+        console.log(`Adding ICE candidate from ${message.senderName}`);
         await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+        console.log(`ICE candidate added successfully for ${message.senderName}`);
       }
     } catch (error) {
-      console.error('Error handling ICE candidate:', error);
+      console.error(`Error handling ICE candidate from ${message.senderName}:`, error);
     }
   }
 
@@ -413,6 +484,9 @@ export class WebRTCService {
       
       // Remove the peer
       this.peerConnections.delete(peerId);
+      
+      // Reset connection attempts counter
+      this.connectionAttempts.delete(peerId);
       
       // Notify callback
       this.callbacks.onPeerDisconnected(peerId);
@@ -467,6 +541,8 @@ export class WebRTCService {
 
   // Update the local stream
   public updateLocalStream(newStream: MediaStream | null): void {
+    console.log(`Updating local stream${newStream ? ` with ID: ${newStream.id}` : ' (removing stream)'}`);
+    
     // Remove old tracks from all connections
     if (this.localStream) {
       const senders = new Map();
@@ -477,6 +553,7 @@ export class WebRTCService {
       });
       
       this.localStream.getTracks().forEach(track => {
+        console.log(`Stopping track: ${track.kind}:${track.id}`);
         track.stop();
         
         // Remove track from all connections
@@ -494,10 +571,14 @@ export class WebRTCService {
     
     // Add new tracks to all connections
     if (this.localStream) {
+      console.log(`Adding ${this.localStream.getTracks().length} new tracks to all peer connections`);
+      
       this.peerConnections.forEach((peerInfo, peerId) => {
         const connection = peerInfo.connection;
+        console.log(`Adding tracks to connection for peer: ${peerInfo.name}`);
         
         this.localStream!.getTracks().forEach(track => {
+          console.log(`Adding track ${track.kind}:${track.id} to connection for ${peerInfo.name}`);
           connection.addTrack(track, this.localStream!);
         });
       });
