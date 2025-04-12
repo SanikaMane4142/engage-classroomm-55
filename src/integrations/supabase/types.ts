@@ -9,109 +9,86 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      activities: {
+      meeting_participants: {
         Row: {
-          courseName: string | null
-          created_at: string
-          description: string | null
-          engegementrating: string | null
-          id: number
-          user_id: string | null
+          id: string
+          joined_at: string
+          meeting_id: string
+          status: string
+          user_id: string
         }
         Insert: {
-          courseName?: string | null
-          created_at?: string
-          description?: string | null
-          engegementrating?: string | null
-          id?: number
-          user_id?: string | null
+          id?: string
+          joined_at?: string
+          meeting_id: string
+          status?: string
+          user_id: string
         }
         Update: {
-          courseName?: string | null
-          created_at?: string
-          description?: string | null
-          engegementrating?: string | null
-          id?: number
-          user_id?: string | null
+          id?: string
+          joined_at?: string
+          meeting_id?: string
+          status?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "activities_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "meeting_participants_meeting_id_fkey"
+            columns: ["meeting_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "meetings"
             referencedColumns: ["id"]
           },
         ]
       }
-      courses: {
-        Row: {
-          "attended classes": number | null
-          completed: boolean | null
-          created_at: string
-          id: number
-          name: string | null
-          use_id: string | null
-        }
-        Insert: {
-          "attended classes"?: number | null
-          completed?: boolean | null
-          created_at?: string
-          id?: number
-          name?: string | null
-          use_id?: string | null
-        }
-        Update: {
-          "attended classes"?: number | null
-          completed?: boolean | null
-          created_at?: string
-          id?: number
-          name?: string | null
-          use_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "courses_use_id_fkey"
-            columns: ["use_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ping: {
+      meetings: {
         Row: {
           created_at: string
+          created_by: string
+          id: string
+          name: string
+          status: string
         }
         Insert: {
           created_at?: string
+          created_by: string
+          id: string
+          name: string
+          status?: string
         }
         Update: {
           created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          status?: string
         }
         Relationships: []
       }
       profiles: {
         Row: {
-          avatar: string | null
+          avatar_url: string | null
           created_at: string | null
+          display_name: string | null
           id: string
-          name: string
           role: string
+          updated_at: string | null
         }
         Insert: {
-          avatar?: string | null
+          avatar_url?: string | null
           created_at?: string | null
+          display_name?: string | null
           id: string
-          name: string
-          role: string
+          role?: string
+          updated_at?: string | null
         }
         Update: {
-          avatar?: string | null
+          avatar_url?: string | null
           created_at?: string | null
+          display_name?: string | null
           id?: string
-          name?: string
           role?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
