@@ -31,18 +31,14 @@ export function useMeetingParticipants({ meetingId }: UseMeetingParticipantsProp
         // Build query to fetch participants
         let query = supabase
           .from('meeting_participants')
-          .select(`
-            *,
-            profiles:user_id (display_name, avatar_url)
-          `)
-          .order('joined_at', { ascending: false });
+          .select('*');
         
         // Filter by meeting ID if provided
         if (meetingId) {
           query = query.eq('meeting_id', meetingId);
         }
         
-        const { data, error: fetchError } = await query;
+        const { data: participantsData, error: fetchError } = await query.order('joined_at', { ascending: false });
             
         if (fetchError) {
           console.error('Error fetching participants:', fetchError);
@@ -54,15 +50,25 @@ export function useMeetingParticipants({ meetingId }: UseMeetingParticipantsProp
           });
           setParticipants([]);
         } else {
-          console.log('Participants data fetched successfully:', data);
+          console.log('Participants data fetched successfully:', participantsData);
           
-          // Map and format participant data with user names
-          const formattedParticipants = data?.map(participant => ({
-            ...participant,
-            user_name: participant.profiles?.display_name || `User ${participant.user_id.substring(0, 6)}`
-          })) || [];
+          // For each participant, fetch their profile to get display name
+          const participantsWithProfiles = await Promise.all(
+            participantsData.map(async (participant) => {
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('display_name')
+                .eq('id', participant.user_id)
+                .single();
+              
+              return {
+                ...participant,
+                user_name: profileData?.display_name || `User ${participant.user_id.substring(0, 6)}`
+              };
+            })
+          );
           
-          setParticipants(formattedParticipants);
+          setParticipants(participantsWithProfiles);
         }
       } catch (err) {
         console.error('Error in fetchParticipants:', err);

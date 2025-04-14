@@ -10,7 +10,7 @@ export async function enableRealtimeForTable(tableName: string): Promise<boolean
     // First, set the table's replica identity to FULL to ensure we get complete row data
     const { error: replicaError } = await supabase.rpc('set_table_replica_identity', { 
       table_name: tableName 
-    });
+    }) as { error: Error | null };
     
     if (replicaError) {
       console.error(`Error setting replica identity for ${tableName}:`, replicaError);
@@ -20,7 +20,7 @@ export async function enableRealtimeForTable(tableName: string): Promise<boolean
     // Then, add the table to the supabase_realtime publication
     const { error: publicationError } = await supabase.rpc('add_table_to_publication', { 
       table_name: tableName 
-    });
+    }) as { error: Error | null };
     
     if (publicationError) {
       console.error(`Error adding ${tableName} to realtime publication:`, publicationError);
