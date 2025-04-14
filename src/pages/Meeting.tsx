@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +44,6 @@ const Meeting = () => {
 
   // Media state
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCameraOn, setIsCameraOn] = useState(true);
@@ -247,31 +247,42 @@ const Meeting = () => {
     };
   }, [meetingId, toast, user?.role, cameraAccessChecked]);
   
-  // Attach student streams to video elements when they're available
+  // Attach student streams to video elements when they're updated or added
   useEffect(() => {
     console.log(`Attaching ${studentStreams.length} student streams to video elements`);
-    studentStreams.forEach(student => {
-      if (student.videoRef?.current && student.stream) {
-        console.log(`Attaching stream ${student.stream.id} for student ${student.name}`);
-        attachMediaStream(student.videoRef.current, student.stream);
-        
-        // Log video tracks info
-        const videoTracks = student.stream.getVideoTracks();
-        console.log(`Student ${student.name} has ${videoTracks.length} video tracks:`, 
-          videoTracks.map(t => ({ 
-            enabled: t.enabled, 
-            muted: t.muted, 
-            label: t.label,
-            id: t.id
-          }))
-        );
-      } else {
-        console.warn(`Video ref or stream for student ${student.name} is not available`, {
-          hasRef: !!student.videoRef?.current,
-          hasStream: !!student.stream
-        });
-      }
-    });
+    
+    // Add a slight delay to ensure React has updated the DOM
+    const timer = setTimeout(() => {
+      studentStreams.forEach(student => {
+        if (student.videoRef?.current && student.stream) {
+          console.log(`Attaching stream ${student.stream.id} for student ${student.name}`);
+          attachMediaStream(student.videoRef.current, student.stream);
+          
+          // Log video tracks info
+          const videoTracks = student.stream.getVideoTracks();
+          console.log(`Student ${student.name} has ${videoTracks.length} video tracks:`, 
+            videoTracks.map(t => ({ 
+              enabled: t.enabled, 
+              muted: t.muted, 
+              label: t.label,
+              id: t.id
+            }))
+          );
+          
+          // Force play if needed
+          student.videoRef.current.play().catch(e => 
+            console.warn(`Error playing video for ${student.name}:`, e)
+          );
+        } else {
+          console.warn(`Video ref or stream for student ${student.name} is not available`, {
+            hasRef: !!student.videoRef?.current,
+            hasStream: !!student.stream
+          });
+        }
+      });
+    }, 100); // Short delay to allow React to update
+    
+    return () => clearTimeout(timer);
   }, [studentStreams]);
   
   // Toggle microphone
@@ -424,7 +435,17 @@ const Meeting = () => {
           <AlertTriangle className="mx-auto h-12 w-12 text-red-500 mb-4" />
           <h2 className="text-xl font-bold mb-2">Media Access Error</h2>
           <p className="text-gray-600 mb-6">{errorMessage}</p>
-          <Button onClick={() => navigate('/dashboard')}>Return to Dashboard</Button>
+          <div className="space-y-4">
+            <Button onClick={() => {
+              setErrorMessage(null);
+              setCameraAccessChecked(false);
+            }} className="w-full">
+              Try Again
+            </Button>
+            <Button onClick={() => navigate('/dashboard')} variant="outline" className="w-full">
+              Return to Dashboard
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -550,7 +571,7 @@ const Meeting = () => {
           
           {/* Thumbnails row - show more thumbnails in a scrollable container */}
           <div className="h-24 p-2">
-            <ScrollArea orientation="horizontal" className="h-full">
+            <ScrollArea className="h-full">
               <div className="flex space-x-2 h-full">
                 {/* Teacher thumbnail */}
                 <div 
@@ -690,12 +711,14 @@ const Meeting = () => {
         </SheetContent>
       </Sheet>
       
-      {/* Emotion metrics for teachers - now positioned on the right side */}
+      {/* Emotion metrics for teachers - positioned on the right side */}
       {user?.role === 'teacher' && (
-        <EmotionMetrics 
-          emotionData={emotionData} 
-          isVisible={showEmotionMetrics}
-        />
+        <div className="absolute top-16 right-4 z-30 w-64">
+          <EmotionMetrics 
+            emotionData={emotionData} 
+            isVisible={showEmotionMetrics}
+          />
+        </div>
       )}
     </div>
   );
