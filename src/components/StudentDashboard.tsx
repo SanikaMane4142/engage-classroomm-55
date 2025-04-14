@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
+import MeetingParticipantsTable from './MeetingParticipantsTable';
 
 const StudentDashboard: React.FC = () => {
   const { 
@@ -210,6 +211,19 @@ const StudentDashboard: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* New section for meeting participants */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Real-Time Meeting Participants</CardTitle>
+          <CardDescription>
+            Students who have joined meetings from the database
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MeetingParticipantsTable />
+        </CardContent>
+      </Card>
     </div>
   );
 };
