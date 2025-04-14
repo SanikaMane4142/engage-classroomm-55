@@ -6,6 +6,7 @@ import { Video, Activity, BarChart3, BookOpen, AlertTriangle } from 'lucide-reac
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '@/components/ui/use-toast';
 
 const StudentDashboard: React.FC = () => {
   const { 
@@ -17,6 +18,7 @@ const StudentDashboard: React.FC = () => {
   
   const [mediaError, setMediaError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   // Check camera and microphone access
   useEffect(() => {
@@ -25,6 +27,7 @@ const StudentDashboard: React.FC = () => {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         // Successfully got access, stop all tracks
         stream.getTracks().forEach(track => track.stop());
+        setMediaError(null);
       } catch (error) {
         console.error('Media access error:', error);
         setMediaError(
@@ -37,6 +40,38 @@ const StudentDashboard: React.FC = () => {
 
     checkMediaAccess();
   }, []);
+
+  const handleTryAgain = () => {
+    if (navigator.permissions) {
+      navigator.permissions.query({ name: 'camera' as PermissionName })
+        .then(result => {
+          if (result.state === 'prompt' || result.state === 'denied') {
+            // Try again to request camera access
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+              .then(stream => {
+                // Successfully got access, stop all tracks
+                stream.getTracks().forEach(track => track.stop());
+                setMediaError(null);
+                toast({
+                  title: "Media access granted",
+                  description: "Camera and microphone access has been enabled."
+                });
+              })
+              .catch(err => {
+                setMediaError('Please grant camera access to join meetings.');
+                toast({
+                  variant: "destructive",
+                  title: "Media access error",
+                  description: "Could not access camera or microphone. Please check your device permissions."
+                });
+              });
+          }
+        })
+        .catch(error => {
+          console.error('Error checking permissions:', error);
+        });
+    }
+  };
 
   if (isLoading) {
     return <div className="flex justify-center items-center py-10">Loading student data...</div>;
@@ -57,18 +92,7 @@ const StudentDashboard: React.FC = () => {
             <div className="mt-2">
               <Button 
                 variant="outline" 
-                onClick={() => {
-                  if (navigator.permissions) {
-                    navigator.permissions.query({ name: 'camera' as PermissionName })
-                      .then(result => {
-                        if (result.state === 'prompt' || result.state === 'denied') {
-                          setMediaError('Please grant camera access to join meetings.');
-                        } else {
-                          setMediaError(null);
-                        }
-                      });
-                  }
-                }}
+                onClick={handleTryAgain}
               >
                 Try Again
               </Button>

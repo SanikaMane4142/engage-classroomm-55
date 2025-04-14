@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -477,8 +476,8 @@ const Meeting = () => {
       </div>
       
       {activeView === 'grid' ? (
-        // Grid view layout
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-2 h-full w-full">
+        // Grid view layout with support for multiple students
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 p-2 h-full w-full">
           {/* Teacher/Local video */}
           <div className="relative rounded-lg overflow-hidden bg-gray-900 aspect-video">
             <video
@@ -493,7 +492,7 @@ const Meeting = () => {
             </div>
           </div>
           
-          {/* Student videos */}
+          {/* Student videos - now we show all of them without limiting */}
           {studentStreams.map((student) => (
             <div 
               key={student.id} 
@@ -549,45 +548,47 @@ const Meeting = () => {
             </div>
           </div>
           
-          {/* Thumbnails row */}
+          {/* Thumbnails row - show more thumbnails in a scrollable container */}
           <div className="h-24 p-2">
-            <div className="flex space-x-2 h-full">
-              {/* Teacher thumbnail */}
-              <div 
-                className={`relative rounded-lg overflow-hidden bg-gray-900 h-full aspect-video cursor-pointer ${!focusedStudent ? 'ring-2 ring-blue-500' : ''}`}
-                onClick={() => setFocusedStudent(null)}
-              >
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute bottom-1 left-1 bg-black/60 text-white px-1 py-0.5 text-xs rounded">
-                  You
-                </div>
-              </div>
-              
-              {/* Student thumbnails */}
-              {studentStreams.map((student) => (
+            <ScrollArea orientation="horizontal" className="h-full">
+              <div className="flex space-x-2 h-full">
+                {/* Teacher thumbnail */}
                 <div 
-                  key={student.id} 
-                  className={`relative rounded-lg overflow-hidden bg-gray-900 h-full aspect-video cursor-pointer ${student.id === focusedStudent ? 'ring-2 ring-blue-500' : ''}`}
-                  onClick={() => focusOnStudent(student.id)}
+                  className={`relative rounded-lg overflow-hidden bg-gray-900 h-full aspect-video cursor-pointer ${!focusedStudent ? 'ring-2 ring-blue-500' : ''}`}
+                  onClick={() => setFocusedStudent(null)}
                 >
                   <video
-                    ref={student.videoRef}
+                    ref={localVideoRef}
                     autoPlay
                     playsInline
+                    muted
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute bottom-1 left-1 bg-black/60 text-white px-1 py-0.5 text-xs rounded">
-                    {student.name.split(' ')[0]}
+                    You
                   </div>
                 </div>
-              ))}
-            </div>
+                
+                {/* Student thumbnails - show all of them */}
+                {studentStreams.map((student) => (
+                  <div 
+                    key={student.id} 
+                    className={`relative rounded-lg overflow-hidden bg-gray-900 h-full aspect-video cursor-pointer ${student.id === focusedStudent ? 'ring-2 ring-blue-500' : ''}`}
+                    onClick={() => focusOnStudent(student.id)}
+                  >
+                    <video
+                      ref={student.videoRef}
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute bottom-1 left-1 bg-black/60 text-white px-1 py-0.5 text-xs rounded">
+                      {student.name.split(' ')[0]}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           </div>
         </div>
       )}
@@ -689,14 +690,12 @@ const Meeting = () => {
         </SheetContent>
       </Sheet>
       
-      {/* Emotion metrics for teachers */}
+      {/* Emotion metrics for teachers - now positioned on the right side */}
       {user?.role === 'teacher' && (
-        <div className="absolute top-16 left-4 z-10 w-80">
-          <EmotionMetrics 
-            emotionData={emotionData} 
-            isVisible={showEmotionMetrics}
-          />
-        </div>
+        <EmotionMetrics 
+          emotionData={emotionData} 
+          isVisible={showEmotionMetrics}
+        />
       )}
     </div>
   );

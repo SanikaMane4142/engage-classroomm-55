@@ -1,232 +1,125 @@
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-// Define types for student data
-export interface Student {
+interface Student {
   id: string;
   name: string;
   email: string;
-  grade: number;
   attendance: number;
-  assignments: number;
-  avatar?: string;
 }
 
-export interface StudentStat {
+interface Course {
   id: string;
   name: string;
-  value: number;
+  description: string;
 }
 
-export interface CourseData {
-  id: string;
-  name: string;
-  progress: number;
-  totalStudents: number;
-}
-
-// Helper to generate mock data
-const generateMockData = (): {
+interface StudentData {
   students: Student[];
-  attendanceStats: StudentStat[];
-  assignmentStats: StudentStat[];
-  courseData: CourseData[];
-} => {
-  // Generate mock students
-  const students: Student[] = [
-    {
-      id: '1',
-      name: 'Alice Johnson',
-      email: 'alice@example.com',
-      grade: 92,
-      attendance: 95,
-      assignments: 88,
-      avatar: '/placeholder.svg'
-    },
-    {
-      id: '2',
-      name: 'Bob Smith',
-      email: 'bob@example.com',
-      grade: 85,
-      attendance: 78,
-      assignments: 92,
-      avatar: '/placeholder.svg'
-    },
-    {
-      id: '3',
-      name: 'Charlie Brown',
-      email: 'charlie@example.com',
-      grade: 76,
-      attendance: 85,
-      assignments: 79,
-      avatar: '/placeholder.svg'
-    },
-    {
-      id: '4',
-      name: 'Diana Ross',
-      email: 'diana@example.com',
-      grade: 95,
-      attendance: 98,
-      assignments: 94,
-      avatar: '/placeholder.svg'
-    },
-    {
-      id: '5',
-      name: 'Ethan Hunt',
-      email: 'ethan@example.com',
-      grade: 82,
-      attendance: 90,
-      assignments: 85,
-      avatar: '/placeholder.svg'
-    }
-  ];
-  
-  // Generate attendance stats
-  const attendanceStats: StudentStat[] = students.map(student => ({
-    id: student.id,
-    name: student.name,
-    value: student.attendance
-  }));
-  
-  // Generate assignment stats
-  const assignmentStats: StudentStat[] = students.map(student => ({
-    id: student.id,
-    name: student.name,
-    value: student.assignments
-  }));
-  
-  // Generate course data
-  const courseData: CourseData[] = [
-    { id: '1', name: 'Mathematics', progress: 85, totalStudents: 28 },
-    { id: '2', name: 'Science', progress: 72, totalStudents: 32 },
-    { id: '3', name: 'Literature', progress: 90, totalStudents: 25 },
-    { id: '4', name: 'History', progress: 68, totalStudents: 30 }
-  ];
-  
-  return { students, attendanceStats, assignmentStats, courseData };
-};
+  courseData: Course[];
+  isLoading: boolean;
+  error: string | null;
+}
 
-// Custom hook for student data
-export const useStudentData = (useRealData: boolean = false) => {
+export function useStudentData(): StudentData {
   const [students, setStudents] = useState<Student[]>([]);
-  const [attendanceStats, setAttendanceStats] = useState<StudentStat[]>([]);
-  const [assignmentStats, setAssignmentStats] = useState<StudentStat[]>([]);
-  const [courseData, setCourseData] = useState<CourseData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [courseData, setCourseData] = useState<Course[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   useEffect(() => {
-    const fetchData = async () => {
+    async function fetchStudentData() {
       try {
-        // Always set mock data first, then try to fetch real data if requested
-        const mockData = generateMockData();
-        setStudents(mockData.students);
-        setAttendanceStats(mockData.attendanceStats);
-        setAssignmentStats(mockData.assignmentStats);
-        setCourseData(mockData.courseData);
+        setIsLoading(true);
         
-        console.info('Using mock data for student dashboard');
+        // Check if tables exist before querying
+        const { data: tables, error: tablesError } = await supabase
+          .from('pg_tables')
+          .select('tablename')
+          .eq('schemaname', 'public');
         
-        if (useRealData) {
-          // Attempt to fetch real data from Supabase
-          console.log('Attempting to fetch real data from Supabase');
-          
-          // This code would work if the tables exist in Supabase
-          const { data: profilesData, error: profilesError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('role', 'student');
-            
-          if (profilesError) {
-            throw new Error(`Error fetching profiles: ${profilesError.message}`);
-          }
-          
-          if (profilesData && profilesData.length > 0) {
-            // Map profiles data to students
-            const realStudents: Student[] = profilesData.map((profile: any) => ({
-              id: profile.id,
-              name: profile.display_name || 'Unknown',
-              email: profile.email || 'unknown@example.com',
-              grade: Math.floor(Math.random() * 30) + 70, // Random grade 70-100
-              attendance: Math.floor(Math.random() * 30) + 70, // Random attendance 70-100
-              assignments: Math.floor(Math.random() * 30) + 70, // Random assignments 70-100
-              avatar: profile.avatar_url || '/placeholder.svg'
-            }));
-            
-            setStudents(realStudents);
-            
-            // Generate real stats
-            const realAttendanceStats: StudentStat[] = realStudents.map(student => ({
-              id: student.id,
-              name: student.name,
-              value: student.attendance
-            }));
-            
-            const realAssignmentStats: StudentStat[] = realStudents.map(student => ({
-              id: student.id,
-              name: student.name,
-              value: student.assignments
-            }));
-            
-            setAttendanceStats(realAttendanceStats);
-            setAssignmentStats(realAssignmentStats);
-            
-            // Fetch course data if we have a courses table
-            // This is just a placeholder, would need real table
-            try {
-              // Using a type check here to catch the courses table absence
-              const availableTables = ['meeting_participants', 'meetings', 'profiles'];
-              
-              if (availableTables.includes('courses')) {
-                const { data: coursesData, error: coursesError } = await supabase
-                  .from('courses')
-                  .select('*');
-                  
-                if (coursesError) {
-                  console.warn(`Courses table not found, using mock data: ${coursesError.message}`);
-                } else if (coursesData && coursesData.length > 0) {
-                  const realCourses: CourseData[] = coursesData.map((course: any) => ({
-                    id: course.id,
-                    name: course.name,
-                    progress: course.progress || Math.floor(Math.random() * 30) + 70,
-                    totalStudents: course.total_students || Math.floor(Math.random() * 20) + 20
-                  }));
-                  
-                  setCourseData(realCourses);
-                }
-              } else {
-                console.log("Courses table does not exist, using mock course data");
-              }
-            } catch (courseError) {
-              console.warn('Error fetching courses, using mock data');
-            }
-          }
+        if (tablesError) {
+          console.error('Error checking tables:', tablesError);
+          throw new Error('Error checking database tables');
         }
-      } catch (err) {
-        console.error('Error fetching student data:', err);
-        setError('Failed to load student data. Using mock data instead.');
         
-        // Use mock data as fallback
-        const mockData = generateMockData();
-        setStudents(mockData.students);
-        setAttendanceStats(mockData.attendanceStats);
-        setAssignmentStats(mockData.assignmentStats);
-        setCourseData(mockData.courseData);
+        const tableNames = tables?.map(t => t.tablename) || [];
+        
+        // Fetch meetings as courses if table exists
+        if (tableNames.includes('meetings')) {
+          const { data: meetingsData, error: meetingsError } = await supabase
+            .from('meetings')
+            .select('*');
+            
+          if (meetingsError) {
+            console.error('Error fetching meetings:', meetingsError);
+            throw new Error('Could not fetch courses data');
+          }
+          
+          // Map meetings to courses
+          const coursesFromMeetings = meetingsData?.map(meeting => ({
+            id: meeting.id,
+            name: meeting.name || 'Unnamed Course',
+            description: `Created on ${new Date(meeting.created_at).toLocaleDateString()}`
+          })) || [];
+          
+          setCourseData(coursesFromMeetings);
+        } else {
+          // Mock course data if no meetings table
+          setCourseData([
+            { id: '1', name: 'Mathematics 101', description: 'Introduction to Algebra and Calculus' },
+            { id: '2', name: 'Physics 101', description: 'Introduction to Classical Mechanics' },
+            { id: '3', name: 'Computer Science 101', description: 'Introduction to Programming' }
+          ]);
+        }
+        
+        // Fetch participants as students if table exists
+        if (tableNames.includes('meeting_participants') && tableNames.includes('profiles')) {
+          const { data: participantsData, error: participantsError } = await supabase
+            .from('meeting_participants')
+            .select('*, profiles(*)');
+            
+          if (participantsError) {
+            console.error('Error fetching participants:', participantsError);
+            throw new Error('Could not fetch student data');
+          }
+          
+          // Map participants to students
+          const studentsFromParticipants = participantsData?.map(participant => ({
+            id: participant.user_id,
+            name: participant.profiles?.display_name || 'Anonymous Student',
+            email: `student${participant.user_id.substring(0, 4)}@example.com`,
+            attendance: Math.floor(Math.random() * 40) + 60 // Random attendance between 60-100%
+          })) || [];
+          
+          setStudents(studentsFromParticipants);
+        } else {
+          // Mock student data if no participants or profiles table
+          setStudents([
+            { id: '1', name: 'John Doe', email: 'john@example.com', attendance: 85 },
+            { id: '2', name: 'Jane Smith', email: 'jane@example.com', attendance: 92 },
+            { id: '3', name: 'Bob Johnson', email: 'bob@example.com', attendance: 78 },
+            { id: '4', name: 'Alice Brown', email: 'alice@example.com', attendance: 95 },
+            { id: '5', name: 'Charlie Davis', email: 'charlie@example.com', attendance: 70 }
+          ]);
+        }
+        
+      } catch (err) {
+        console.error('Error in fetchStudentData:', err);
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
       } finally {
         setIsLoading(false);
       }
-    };
-    
-    fetchData();
-  }, [useRealData]);
-  
-  return { 
-    students, 
-    attendanceStats, 
-    assignmentStats,
+    }
+
+    fetchStudentData();
+  }, []);
+
+  return {
+    students,
     courseData,
-    isLoading, 
-    error 
+    isLoading,
+    error
   };
-};
+}
