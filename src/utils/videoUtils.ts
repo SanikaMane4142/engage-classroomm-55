@@ -1,4 +1,3 @@
-
 // Helper functions for managing media streams and devices
 
 /**
@@ -11,7 +10,16 @@ export const getUserMedia = async (video = true, audio = true) => {
       audio,
     };
     
-    return await navigator.mediaDevices.getUserMedia(constraints);
+    console.log(`Attempting to get user media with constraints:`, constraints);
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    console.log(`Successfully got user media stream with ${stream.getVideoTracks().length} video tracks and ${stream.getAudioTracks().length} audio tracks`);
+    
+    // Log information about each track for debugging
+    stream.getTracks().forEach(track => {
+      console.log(`Track: ${track.kind}, Label: ${track.label}, ID: ${track.id}, Enabled: ${track.enabled}`);
+    });
+    
+    return stream;
   } catch (error) {
     console.error('Error accessing media devices:', error);
     throw error;
@@ -66,10 +74,13 @@ export const getVideoInputDevices = async () => {
  */
 export const getDisplayMedia = async () => {
   try {
-    return await navigator.mediaDevices.getDisplayMedia({
+    console.log('Attempting to get display media...');
+    const stream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: false,
     });
+    console.log('Successfully got display media');
+    return stream;
   } catch (error) {
     console.error('Error sharing screen:', error);
     throw error;
@@ -81,7 +92,9 @@ export const getDisplayMedia = async () => {
  */
 export const stopMediaStream = (stream: MediaStream | null) => {
   if (!stream) return;
+  console.log(`Stopping media stream with ${stream.getTracks().length} tracks`);
   stream.getTracks().forEach(track => {
+    console.log(`Stopping ${track.kind} track: ${track.label}`);
     track.stop();
   });
 };
@@ -95,12 +108,18 @@ export const attachMediaStream = (videoElement: HTMLVideoElement | null, stream:
     return;
   }
   
-  console.log("Attaching media stream to video element", stream.id);
+  console.log(`Attaching media stream ${stream.id} to video element. Stream has ${stream.getVideoTracks().length} video tracks and ${stream.getAudioTracks().length} audio tracks`);
   videoElement.srcObject = stream;
   
   // Ensure the video plays by handling the loadedmetadata event
   videoElement.onloadedmetadata = () => {
+    console.log('Video loadedmetadata event fired, attempting to play');
     videoElement.play().catch(e => console.error('Error playing video:', e));
+  };
+  
+  // Add error handler
+  videoElement.onerror = (event) => {
+    console.error('Video element error:', event);
   };
 };
 
@@ -314,22 +333,50 @@ const createCanvasStreamWithName = async (name: string) => {
  */
 export const checkCameraAccess = async () => {
   try {
+    console.log('Checking camera access...');
+    
+    // First check if the browser supports getUserMedia
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return { 
+        success: false, 
+        message: "Your browser doesn't support camera access", 
+        device: null,
+        browserSupport: false
+      };
+    }
+    
     // Request camera permissions
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     const tracks = stream.getVideoTracks();
     
+    console.log(`Got camera access with ${tracks.length} video tracks`);
+    
+    // List all media devices for debugging
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    console.log('All available media devices:', devices);
+    
     if (tracks.length === 0) {
-      return { success: false, message: "No camera detected", device: null };
+      return { 
+        success: false, 
+        message: "No camera detected", 
+        device: null,
+        browserSupport: true
+      };
     }
     
+    const track = tracks[0];
+    const settings = track.getSettings();
     const deviceInfo = {
-      label: tracks[0].label,
-      id: tracks[0].getSettings().deviceId,
+      label: track.label,
+      id: settings.deviceId,
       resolution: {
-        width: tracks[0].getSettings().width,
-        height: tracks[0].getSettings().height
-      }
+        width: settings.width,
+        height: settings.height
+      },
+      frameRate: settings.frameRate
     };
+    
+    console.log('Camera info:', deviceInfo);
     
     // Clean up
     stopMediaStream(stream);
@@ -337,14 +384,37 @@ export const checkCameraAccess = async () => {
     return {
       success: true,
       message: "Camera access granted",
-      device: deviceInfo
+      device: deviceInfo,
+      browserSupport: true
     };
   } catch (err) {
     console.error("Camera access error:", err);
+    
+    // Try to determine if this is a permission error or a hardware error
+    let errorMessage = "Unknown camera error";
+    let errorType = "unknown";
+    
+    if (err instanceof Error) {
+      errorMessage = err.message;
+      
+      // Try to categorize the error
+      if (errorMessage.includes("Permission") || 
+          errorMessage.includes("permission") || 
+          errorMessage.includes("denied")) {
+        errorType = "permission";
+      } else if (errorMessage.includes("hardware") || 
+                errorMessage.includes("not found") || 
+                errorMessage.includes("unavailable")) {
+        errorType = "hardware";
+      }
+    }
+    
     return {
       success: false,
-      message: err instanceof Error ? err.message : "Unknown camera error",
-      device: null
+      message: errorMessage,
+      device: null,
+      browserSupport: true,
+      errorType: errorType
     };
   }
 };

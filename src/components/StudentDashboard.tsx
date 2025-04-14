@@ -17,34 +17,68 @@ const StudentDashboard: React.FC = () => {
   } = useStudentData();
   
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [isCameraChecking, setIsCameraChecking] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Check camera and microphone access
+  // Check camera and microphone access with improved error handling
   useEffect(() => {
     const checkMediaAccess = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setIsCameraChecking(true);
+        console.log("Attempting to access camera and microphone...");
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: true, 
+          audio: true 
+        });
+        
+        // Log available devices to help with debugging
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === 'videoinput');
+        console.log(`Found ${videoDevices.length} video input devices:`, 
+          videoDevices.map(d => ({ label: d.label, id: d.deviceId })));
+        
         // Successfully got access, stop all tracks
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach(track => {
+          console.log(`Stopping ${track.kind} track: ${track.label}`);
+          track.stop();
+        });
+        
         setMediaError(null);
+        toast({
+          title: "Media access granted",
+          description: "Camera and microphone are ready for meetings."
+        });
       } catch (error) {
         console.error('Media access error:', error);
-        setMediaError(
-          error instanceof Error 
-            ? error.message
-            : 'Could not access camera or microphone. Please check your device permissions.'
-        );
+        const errorMsg = error instanceof Error 
+          ? error.message
+          : 'Could not access camera or microphone. Please check your device permissions.';
+        
+        setMediaError(errorMsg);
+        
+        toast({
+          variant: "destructive",
+          title: "Media access error",
+          description: errorMsg
+        });
+      } finally {
+        setIsCameraChecking(false);
       }
     };
 
     checkMediaAccess();
-  }, []);
+  }, [toast]);
 
   const handleTryAgain = () => {
+    // Reset error state first
+    setMediaError(null);
+    
     if (navigator.permissions) {
       navigator.permissions.query({ name: 'camera' as PermissionName })
         .then(result => {
+          console.log(`Camera permission status: ${result.state}`);
+          
           if (result.state === 'prompt' || result.state === 'denied') {
             // Try again to request camera access
             navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -58,17 +92,51 @@ const StudentDashboard: React.FC = () => {
                 });
               })
               .catch(err => {
+                console.error('Error accessing media on retry:', err);
                 setMediaError('Please grant camera access to join meetings.');
                 toast({
                   variant: "destructive",
                   title: "Media access error",
-                  description: "Could not access camera or microphone. Please check your device permissions."
+                  description: "Could not access camera or microphone. Please check browser settings and try again."
                 });
               });
+          } else if (result.state === 'granted') {
+            // Permission already granted, but we still had an error before
+            // This could be a hardware issue
+            toast({
+              variant: "destructive", 
+              title: "Hardware issue detected",
+              description: "Permission is granted but camera might be in use by another application or not properly connected."
+            });
           }
         })
         .catch(error => {
           console.error('Error checking permissions:', error);
+          toast({
+            variant: "destructive",
+            title: "Permission check error",
+            description: "Could not verify camera permissions. Please check browser settings manually."
+          });
+        });
+    } else {
+      // Browser doesn't support permissions API, try direct access
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+          stream.getTracks().forEach(track => track.stop());
+          setMediaError(null);
+          toast({
+            title: "Media access granted",
+            description: "Camera and microphone access has been enabled."
+          });
+        })
+        .catch(err => {
+          console.error('Error accessing media on fallback:', err);
+          setMediaError('Could not access camera. Please check your browser settings.');
+          toast({
+            variant: "destructive",
+            title: "Media access error",
+            description: "Could not access camera or microphone. Please check your device permissions."
+          });
         });
     }
   };
@@ -87,14 +155,19 @@ const StudentDashboard: React.FC = () => {
         <Alert variant="destructive" className="mb-6">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Media Access Error</AlertTitle>
-          <AlertDescription>
-            {mediaError}
+          <AlertDescription className="space-y-2">
+            <p>{mediaError}</p>
+            <p className="text-sm">
+              For meetings to work properly, you need to grant camera and microphone permissions.
+              Please check your browser settings and ensure no other applications are using your camera.
+            </p>
             <div className="mt-2">
               <Button 
                 variant="outline" 
                 onClick={handleTryAgain}
+                disabled={isCameraChecking}
               >
-                Try Again
+                {isCameraChecking ? 'Checking...' : 'Try Again'}
               </Button>
             </div>
           </AlertDescription>
