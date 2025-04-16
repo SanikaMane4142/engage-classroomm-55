@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -166,6 +165,15 @@ const Meeting = () => {
     checkCamera();
   }, []);
   
+  // Process video elements to get student videos for emotion detection
+  const getStudentVideoElements = () => {
+    return studentStreams.map(student => ({
+      studentId: student.id,
+      studentName: student.name,
+      videoElement: student.videoRef?.current
+    }));
+  };
+  
   // Initialize meeting with media access
   useEffect(() => {
     if (!cameraAccessChecked) return;
@@ -209,10 +217,13 @@ const Meeting = () => {
         
         // Start emotion detection if user is a teacher
         if (user?.role === 'teacher') {
-          const emotionDetection = startEmotionDetection((data) => {
-            setEmotionData(data);
-            setShowEmotionMetrics(true);
-          });
+          const emotionDetection = startEmotionDetection(
+            (data) => {
+              setEmotionData(data);
+              setShowEmotionMetrics(true);
+            },
+            getStudentVideoElements
+          );
           
           // Clean up emotion detection on unmount
           return () => {
