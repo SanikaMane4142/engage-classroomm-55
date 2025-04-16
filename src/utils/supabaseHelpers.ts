@@ -2,35 +2,48 @@
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Enables realtime functionality for a table in Supabase
- * @param tableName The name of the table to enable realtime for
+ * Get profiles with participants table join
  */
-export async function enableRealtimeForTable(tableName: string): Promise<boolean> {
+export const getProfilesWithParticipants = async (meetingId: string) => {
   try {
-    // First, set the table's replica identity to FULL to ensure we get complete row data
-    const { error: replicaError } = await supabase.rpc('set_table_replica_identity', { 
-      table_name: tableName 
-    }) as { error: Error | null };
-    
-    if (replicaError) {
-      console.error(`Error setting replica identity for ${tableName}:`, replicaError);
-      return false;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(`
+        *,
+        participants!inner(*)
+      `)
+      .eq('participants.meeting_id', meetingId as string);
+      
+    if (error) {
+      throw error;
     }
     
-    // Then, add the table to the supabase_realtime publication
-    const { error: publicationError } = await supabase.rpc('add_table_to_publication', { 
-      table_name: tableName 
-    }) as { error: Error | null };
-    
-    if (publicationError) {
-      console.error(`Error adding ${tableName} to realtime publication:`, publicationError);
-      return false;
-    }
-    
-    console.log(`Successfully enabled realtime for ${tableName}`);
-    return true;
-  } catch (err) {
-    console.error('Error enabling realtime:', err);
-    return false;
+    return data;
+  } catch (error) {
+    console.error("Error fetching profiles with participants:", error);
+    return [];
   }
-}
+};
+
+/**
+ * Subscribe to participants changes for a specific meeting
+ */
+export const subscribeToParticipants = (meetingId: string, callback: (payload: any) => void) => {
+  const channel = supabase
+    .channel(`participants:${meetingId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*', 
+        schema: 'public',
+        table: 'participants',
+        filter: `meeting_id=eq.${meetingId as string}`
+      },
+      callback
+    )
+    .subscribe();
+    
+  return () => {
+    supabase.removeChannel(channel);
+  };
+};

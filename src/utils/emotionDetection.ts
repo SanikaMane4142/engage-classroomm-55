@@ -256,7 +256,7 @@ const detectEmotionFromFrame = (
 /**
  * Track and analyze student video frames
  */
-const studentMetrics: Record<string, { 
+let studentMetrics: Record<string, { 
   emotion: 'engaged' | 'bored' | 'sleepy',
   metrics: { eyeOpenness: number, faceForward: number, movement: number },
   confidence: number,

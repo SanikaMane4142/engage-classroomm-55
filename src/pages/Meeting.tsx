@@ -24,6 +24,7 @@ import {
 } from '../utils/videoUtils';
 import { webRTCService } from '../utils/webRTCService';
 import { startEmotionDetection } from '../utils/emotionDetection';
+import { initializeModels } from '../utils/mlEmotionDetection';
 import { X, User, AlertTriangle, Users as UsersIcon, Camera, CameraOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -66,6 +67,9 @@ const Meeting = () => {
   
   // References to video elements
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  
+  // ML model initialization state
+  const [mlModelsInitialized, setMlModelsInitialized] = useState(false);
   
   // WebRTC initialization
   useEffect(() => {
@@ -160,6 +164,25 @@ const Meeting = () => {
       const cameraStatus = await checkCameraAccess();
       console.log("Camera access check:", cameraStatus);
       setCameraAccessChecked(true);
+      
+      // Initialize ML models after camera check
+      if (user?.role === 'teacher') {
+        const modelsLoaded = await initializeModels();
+        setMlModelsInitialized(modelsLoaded);
+        
+        if (modelsLoaded) {
+          toast({
+            title: "ML models loaded",
+            description: "AI-based emotion detection is ready.",
+          });
+        } else {
+          toast({
+            variant: "destructive",
+            title: "ML models failed to load",
+            description: "Using simplified emotion detection instead.",
+          });
+        }
+      }
     };
     
     checkCamera();
@@ -506,6 +529,16 @@ const Meeting = () => {
           <span>Cameras: {videoCameraCount}</span>
         </div>
       </div>
+      
+      {/* ML model status indicator for teachers */}
+      {user?.role === 'teacher' && (
+        <div className="absolute top-16 left-4 z-20">
+          <div className="bg-black/50 text-white px-3 py-1 rounded-md flex items-center gap-2 mt-10">
+            <span className={`w-3 h-3 rounded-full ${mlModelsInitialized ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+            <span>{mlModelsInitialized ? 'ML Analysis Active' : 'Basic Analysis'}</span>
+          </div>
+        </div>
+      )}
       
       {activeView === 'grid' ? (
         // Grid view layout with support for multiple students
