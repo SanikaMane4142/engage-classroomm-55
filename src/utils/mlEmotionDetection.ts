@@ -57,9 +57,9 @@ export const analyzeEmotionWithML = async (
     const resizedTensor = tf.image.resizeBilinear(videoTensor, [128, 128]);
     const batchedTensor = tf.expandDims(resizedTensor, 0);
     
-    // Type assertion to ensure TensorFlow knows this is a Tensor4D
+    // Explicitly type as Tensor4D to fix type error
     const batchedTensor4D = batchedTensor as tf.Tensor4D;
-    const faceDetections = await faceModel.predict(batchedTensor4D) as tf.Tensor;
+    const faceDetections = await faceModel.predict(batchedTensor4D);
     
     // If no face detected, return fallback
     if (!faceDetections) {

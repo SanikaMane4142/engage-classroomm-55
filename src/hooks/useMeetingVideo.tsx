@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { startEmotionDetection } from '@/utils/emotionDetection';
@@ -55,7 +54,7 @@ export const useMeetingVideo = (meetingId: string) => {
   // Add a new state to track if we should create test students
   const [shouldCreateTestStudents, setShouldCreateTestStudents] = useState(true);
 
-  // WebRTC initialization
+  // WebRTC initialization - This is the key part that needs fixing
   useEffect(() => {
     if (!meetingId || !user) return;
     
@@ -65,6 +64,7 @@ export const useMeetingVideo = (meetingId: string) => {
     // Initialize WebRTC with callbacks
     const initWebRTC = async () => {
       if (localStream) {
+        console.log(`Initializing WebRTC with stream ID: ${localStream.id}, tracks: ${localStream.getTracks().length}`);
         await webRTCService.initialize(
           localStream, 
           meetingId,
@@ -81,25 +81,29 @@ export const useMeetingVideo = (meetingId: string) => {
           title: "WebRTC initialized",
           description: "Successfully connected to the meeting room."
         });
+      } else {
+        console.error("Cannot initialize WebRTC: Local stream is not available");
       }
     };
     
     if (localStream && !isWebRTCConnected) {
+      console.log("Found local stream and WebRTC not connected, initializing WebRTC...");
       initWebRTC();
     }
     
     // Clean up WebRTC connections when leaving
     return () => {
       if (isWebRTCConnected) {
+        console.log("Cleaning up WebRTC connection");
         webRTCService.leaveRoom();
         setIsWebRTCConnected(false);
       }
     };
   }, [meetingId, localStream, user, toast, isWebRTCConnected]);
   
-  // Handler for new remote streams
+  // Handler for new remote streams - Important for showing other participants
   const handleRemoteStream = (stream: MediaStream, peerId: string, peerName: string) => {
-    console.log(`Received remote stream from peer ${peerName} (${peerId})`);
+    console.log(`Received remote stream from peer ${peerName} (${peerId}), stream ID: ${stream.id}, tracks: ${stream.getTracks().length}`);
     
     const newStudent: StudentStream = {
       id: peerId,
@@ -409,6 +413,32 @@ export const useMeetingVideo = (meetingId: string) => {
     setErrorMessage(null);
     setCameraAccessChecked(false);
   };
+
+  // Handle test student creation for teacher role
+  useEffect(() => {
+    // Only for teacher role and when test students are requested
+    if (cameraAccessChecked && shouldCreateTestStudents && user?.role === 'teacher' && !isWebRTCConnected) {
+      const createTestStudents = async () => {
+        try {
+          console.log("Creating test student streams for teacher's view");
+          const numberOfTestStudents = 1; // For simplicity, create just 1 test student
+          const testStudents = await createMultipleStudentStreams(numberOfTestStudents);
+          
+          const studentsWithRefs = testStudents.map(student => ({
+            ...student,
+            videoRef: React.createRef<HTMLVideoElement>()
+          }));
+          
+          setStudentStreams(studentsWithRefs);
+          console.log(`Created ${testStudents.length} test student streams`);
+        } catch (error) {
+          console.error("Error creating test students:", error);
+        }
+      };
+      
+      createTestStudents();
+    }
+  }, [cameraAccessChecked, shouldCreateTestStudents, user?.role, isWebRTCConnected]);
 
   return {
     // Refs

@@ -31,7 +31,7 @@ const SpeakerView: React.FC<SpeakerViewProps> = ({
       {/* Main video (focused student or teacher) */}
       <div className="flex-1 p-2">
         <div className="relative rounded-lg overflow-hidden bg-gray-900 h-full">
-          {focusedStudent ? (
+          {focusedStudent && focusedStudentData ? (
             // Focused student video
             <>
               <video
@@ -40,7 +40,8 @@ const SpeakerView: React.FC<SpeakerViewProps> = ({
                 playsInline
                 className="w-full h-full object-cover"
               />
-              <div className="absolute bottom-4 left-4 bg-black/60 text-white px-2 py-1 text-md rounded">
+              <div className="absolute bottom-4 left-4 bg-black/60 text-white px-2 py-1 text-md rounded flex items-center">
+                <div className="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
                 {focusedStudentData?.name}
               </div>
             </>
@@ -96,7 +97,8 @@ const SpeakerView: React.FC<SpeakerViewProps> = ({
                   playsInline
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute bottom-1 left-1 bg-black/60 text-white px-1 py-0.5 text-xs rounded">
+                <div className="absolute bottom-1 left-1 bg-black/60 text-white px-1 py-0.5 text-xs rounded flex items-center">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1"></div>
                   {student.name.split(' ')[0]}
                 </div>
               </div>
