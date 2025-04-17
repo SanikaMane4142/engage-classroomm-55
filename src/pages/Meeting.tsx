@@ -71,6 +71,9 @@ const Meeting = () => {
   // ML model initialization state
   const [mlModelsInitialized, setMlModelsInitialized] = useState(false);
   
+  // Add a new state to track if we should create test students
+  const [shouldCreateTestStudents, setShouldCreateTestStudents] = useState(true);
+  
   // WebRTC initialization
   useEffect(() => {
     if (!meetingId || !user) return;
@@ -232,6 +235,17 @@ const Meeting = () => {
           console.error("Local video element reference is null");
         }
         
+        // Create test student streams for demo purposes
+        // This would be replaced with real WebRTC connections in production
+        if (shouldCreateTestStudents && user?.role === 'teacher') {
+          console.log("Creating test student streams for demo");
+          const numberOfTestStudents = 3; // You can adjust this as needed
+          const testStudents = await createMultipleStudentStreams(numberOfTestStudents);
+          
+          setStudentStreams(testStudents);
+          console.log(`Created ${testStudents.length} test student streams`);
+        }
+        
         // Show success message
         toast({
           title: "Connected to meeting",
@@ -279,7 +293,7 @@ const Meeting = () => {
       
       stopMediaStream(screenStream);
     };
-  }, [meetingId, toast, user?.role, cameraAccessChecked]);
+  }, [meetingId, toast, user?.role, cameraAccessChecked, shouldCreateTestStudents]);
   
   // Attach student streams to video elements when they're updated or added
   useEffect(() => {
@@ -537,6 +551,19 @@ const Meeting = () => {
             <span className={`w-3 h-3 rounded-full ${mlModelsInitialized ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
             <span>{mlModelsInitialized ? 'ML Analysis Active' : 'Basic Analysis'}</span>
           </div>
+        </div>
+      )}
+      
+      {/* Add a button to simulate students for testing */}
+      {user?.role === 'teacher' && studentStreams.length === 0 && (
+        <div className="absolute top-24 left-4 z-20">
+          <Button 
+            onClick={() => setShouldCreateTestStudents(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            <UsersIcon className="mr-2 h-4 w-4" />
+            Create Test Students
+          </Button>
         </div>
       )}
       

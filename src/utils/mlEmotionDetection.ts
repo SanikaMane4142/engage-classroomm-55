@@ -1,11 +1,10 @@
 import * as tf from '@tensorflow/tfjs';
-import { loadGraphModel } from '@tensorflow/tfjs-converter';
 import { StudentEmotion } from '../components/EmotionMetrics';
 
 // Flag to track model loading status
 let modelsLoaded = false;
 let faceModel: tf.GraphModel | null = null;
-let expressionModel: tf.GraphModel | null = null;
+let expressionModel: tf.LayersModel | null = null;
 
 // We'll keep this simple for the initial implementation
 const FACE_DETECTION_MODEL_URL = 'https://tfhub.dev/tensorflow/tfjs-model/blazeface/1/default/1';
@@ -19,7 +18,7 @@ export const initializeModels = async (): Promise<boolean> => {
     console.log("Loading ML models for emotion detection...");
     
     // Load face detection model (BlazeFace)
-    faceModel = await loadGraphModel(FACE_DETECTION_MODEL_URL);
+    faceModel = await tf.loadGraphModel(FACE_DETECTION_MODEL_URL);
     console.log("Face detection model loaded successfully");
     
     // Load expression recognition model
@@ -53,14 +52,16 @@ export const analyzeEmotionWithML = async (
     // Convert video frame to tensor
     const videoTensor = tf.browser.fromPixels(videoElement);
     
-    // Process with face detection model
-    const faceDetections = await faceModel.predict(
-      tf.expandDims(tf.image.resizeBilinear(videoTensor, [128, 128]), 0)
-    );
+    // Process with face detection model - using tf.expandDims to create a batch dimension
+    const resizedTensor = tf.image.resizeBilinear(videoTensor, [128, 128]);
+    const batchedTensor = tf.expandDims(resizedTensor, 0);
+    const faceDetections = await faceModel.predict(batchedTensor) as tf.Tensor;
     
     // If no face detected, return fallback
     if (!faceDetections) {
       videoTensor.dispose();
+      resizedTensor.dispose();
+      batchedTensor.dispose();
       return {
         emotion: 'bored',
         metrics: { eyeOpenness: 0.5, faceForward: 0.5, movement: 0.2 },
@@ -70,7 +71,7 @@ export const analyzeEmotionWithML = async (
     
     // Process face for expression recognition
     const face = tf.image.cropAndResize(
-      videoTensor, 
+      videoTensor.expandDims(0), 
       [[0, 0, 1, 1]], // Use whole frame for now, in a real app we'd use face coords
       [0], 
       [48, 48]
@@ -81,12 +82,10 @@ export const analyzeEmotionWithML = async (
     const normalized = grayscale.div(255.0);
     
     // Get expression prediction
-    const prediction = await expressionModel.predict(
-      normalized.expandDims(0)
-    );
+    const prediction = expressionModel.predict(normalized) as tf.Tensor;
     
-    // Get values from tensors
-    const emotionValues = await prediction.data();
+    // Get values from tensors - now using .arraySync() which returns values directly
+    const emotionValues = Array.from(prediction.arraySync() as number[][])[0];
     
     // Map expression values to our emotion categories
     // In a real model, you would have specific classes for engagement
@@ -113,9 +112,12 @@ export const analyzeEmotionWithML = async (
     
     // Clean up tensors
     videoTensor.dispose();
-    grayscale.dispose();
+    resizedTensor.dispose();
+    batchedTensor.dispose();
     face.dispose();
+    grayscale.dispose();
     normalized.dispose();
+    prediction.dispose();
     
     // Return detection result
     return {

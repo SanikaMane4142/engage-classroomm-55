@@ -174,6 +174,20 @@ export const createMultipleStudentStreams = async (count: number) => {
     // Stop the initial stream as we'll create individual streams
     stopMediaStream(initialStream);
     
+    // If no real cameras found, create canvas streams for all
+    if (studentVideoDevices.length === 0) {
+      console.log(`No additional cameras found. Creating ${count} canvas-based student streams`);
+      for (let i = 0; i < count; i++) {
+        const canvasStream = await createCanvasStreamWithName(`Student ${i+1}`);
+        streams.push({
+          id: `${i + 1}`,
+          name: getStudentName(i),
+          stream: canvasStream,
+        });
+      }
+      return streams;
+    }
+    
     // For real cameras: create a separate stream for each device
     for (let i = 0; i < Math.min(count, studentVideoDevices.length); i++) {
       try {
