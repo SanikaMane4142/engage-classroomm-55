@@ -1,3 +1,4 @@
+
 import * as tf from '@tensorflow/tfjs';
 import { StudentEmotion } from '../components/EmotionMetrics';
 
@@ -55,7 +56,10 @@ export const analyzeEmotionWithML = async (
     // Process with face detection model - using tf.expandDims to create a batch dimension
     const resizedTensor = tf.image.resizeBilinear(videoTensor, [128, 128]);
     const batchedTensor = tf.expandDims(resizedTensor, 0);
-    const faceDetections = await faceModel.predict(batchedTensor) as tf.Tensor;
+    
+    // Type assertion to ensure TensorFlow knows this is a Tensor4D
+    const batchedTensor4D = batchedTensor as tf.Tensor4D;
+    const faceDetections = await faceModel.predict(batchedTensor4D) as tf.Tensor;
     
     // If no face detected, return fallback
     if (!faceDetections) {
